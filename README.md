@@ -51,6 +51,7 @@ The rule the layout enforces: **the popover and Quick Look call the same functio
 Right-click the menu-bar icon → Preferences.
 
 - **Indent** — 2, 4, or 8 spaces
+- **Font size** — 9–28 pt for the popover JSON; ⌘+ / ⌘− also change it while the popover is open
 - **Show ✓ / ✕ badge** — off gives you plain template braces
 - **Launch at login** — via `SMAppService`
 

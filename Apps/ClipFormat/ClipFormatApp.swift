@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = Preferences.shared
     private var cancellables: Set<AnyCancellable> = []
     private var eventMonitor: Any?
+    private var keyMonitor: Any?
     private let preferencesWindow = PreferencesWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -165,11 +166,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.popover.performClose(nil) }
         }
+        // A menu-bar popover rarely participates in the SwiftUI command system,
+        // so ⌘+ / ⌘− are handled here while it is open.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handlePopoverKey(event) ?? event
+        }
     }
 
     private func removeDismissMonitor() {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         eventMonitor = nil
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+    }
+
+    private func handlePopoverKey(_ event: NSEvent) -> NSEvent? {
+        guard popover.isShown else { return event }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard flags.contains(.command),
+              !flags.contains(.option),
+              !flags.contains(.control) else { return event }
+        switch event.charactersIgnoringModifiers {
+        case "=", "+":
+            preferences.increaseFontSize()
+            return nil
+        case "-", "_":
+            preferences.decreaseFontSize()
+            return nil
+        default:
+            return event
+        }
     }
 
     // MARK: - Menu actions

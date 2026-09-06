@@ -7,9 +7,14 @@ import SwiftUI
 final class Preferences: ObservableObject {
     static let shared = Preferences()
 
+    static let minFontSize = 9
+    static let maxFontSize = 28
+    static let defaultFontSize = 12
+
     private enum Key {
         static let indent = "indentWidth"
         static let showBadge = "showBadge"
+        static let fontSize = "fontSize"
     }
 
     private let defaults: UserDefaults
@@ -21,6 +26,18 @@ final class Preferences: ObservableObject {
     /// When off, the status item shows plain braces with no ✓/✕ state.
     @Published var showBadge: Bool {
         didSet { defaults.set(showBadge, forKey: Key.showBadge) }
+    }
+
+    /// Point size of the formatted JSON in the popover. ⌘+ / ⌘− nudge it.
+    @Published var fontSize: Int {
+        didSet {
+            let clamped = min(Self.maxFontSize, max(Self.minFontSize, fontSize))
+            if clamped != fontSize {
+                fontSize = clamped
+                return
+            }
+            defaults.set(fontSize, forKey: Key.fontSize)
+        }
     }
 
     /// Mirrors `SMAppService.mainApp` — the service, not a defaults key, is the
@@ -38,10 +55,23 @@ final class Preferences: ObservableObject {
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        defaults.register(defaults: [Key.indent: 2, Key.showBadge: true])
+        defaults.register(defaults: [
+            Key.indent: 2,
+            Key.showBadge: true,
+            Key.fontSize: Self.defaultFontSize,
+        ])
         indentWidth = defaults.integer(forKey: Key.indent)
         showBadge = defaults.bool(forKey: Key.showBadge)
+        fontSize = defaults.integer(forKey: Key.fontSize)
         launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    func increaseFontSize() {
+        fontSize = min(Self.maxFontSize, fontSize + 1)
+    }
+
+    func decreaseFontSize() {
+        fontSize = max(Self.minFontSize, fontSize - 1)
     }
 
     /// Picks up changes made outside the app (System Settings → Login Items).

@@ -12,6 +12,12 @@ struct PreferencesView: View {
                     Text("8 spaces").tag(8)
                 }
                 .pickerStyle(.inline)
+                Stepper(value: $preferences.fontSize, in: Preferences.minFontSize...Preferences.maxFontSize) {
+                    Text("Font size: \(preferences.fontSize) pt")
+                }
+                Text("In the popover, ⌘+ and ⌘− change the size.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
 
             Section("Menu bar") {

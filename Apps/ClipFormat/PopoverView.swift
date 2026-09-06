@@ -66,7 +66,8 @@ struct PopoverView: View {
     private var content: some View {
         if document.isValid {
             ScrollView([.vertical, .horizontal]) {
-                Text(JSONCanvas.attributedString(from: document, appearance: appearance))
+                Text(JSONCanvas.attributedString(from: document, appearance: appearance,
+                                                fontSize: CGFloat(preferences.fontSize)))
                     .textSelection(.enabled)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -84,7 +85,7 @@ struct PopoverView: View {
             if !document.rawExcerpt().isEmpty {
                 ScrollView {
                     Text(document.rawExcerpt(limit: 1_200))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: CGFloat(max(11, preferences.fontSize - 1)), design: .monospaced))
                         .foregroundStyle(theme.secondaryForeground.color)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -106,6 +107,12 @@ struct PopoverView: View {
             Button("Copy Minified") { copy(document.minifiedText) }
                 .disabled(!document.isValid)
             Spacer()
+            Button("A−") { preferences.decreaseFontSize() }
+                .disabled(preferences.fontSize <= Preferences.minFontSize)
+                .help("Smaller text (⌘−)")
+            Button("A+") { preferences.increaseFontSize() }
+                .disabled(preferences.fontSize >= Preferences.maxFontSize)
+                .help("Larger text (⌘+)")
             Button {
                 openPreferences()
             } label: {
