@@ -5,25 +5,47 @@ struct PreferencesView: View {
 
     var body: some View {
         Form {
-            Picker("Indent:", selection: $preferences.indentWidth) {
-                Text("2 spaces").tag(2)
-                Text("4 spaces").tag(4)
-                Text("8 spaces").tag(8)
+            Section("Formatting") {
+                Picker("Indent:", selection: $preferences.indentWidth) {
+                    Text("2 spaces").tag(2)
+                    Text("4 spaces").tag(4)
+                    Text("8 spaces").tag(8)
+                }
+                .pickerStyle(.inline)
             }
-            .pickerStyle(.inline)
 
-            Toggle("Show ✓ / ✕ badge in the menu bar", isOn: $preferences.showBadge)
-            Toggle("Launch at login", isOn: $preferences.launchAtLogin)
+            Section("Menu bar") {
+                Toggle("Show ✓ / ✕ badge", isOn: $preferences.showBadge)
+                Text("Off shows plain braces that follow the menu bar’s appearance.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
 
-            Section {
-                Text("Quick Look uses the same formatting. If Spacebar previews of .json files don’t change, open ClipFormat once from Applications, then run `qlmanage -r` in Terminal.")
+            Section("Startup") {
+                Toggle("Launch at login", isOn: $preferences.launchAtLogin)
+                if let error = preferences.launchAtLoginError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button("Open Login Items in System Settings…") {
+                    preferences.openLoginItemsSettings()
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 11))
+            }
+
+            Section("Quick Look") {
+                Text("Quick Look uses the same formatting at a fixed 2-space indent. If Spacebar previews of .json files don’t change, keep ClipFormat in Applications, open it once, then run `qlmanage -r` in Terminal.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380)
+        .frame(width: 400)
         .fixedSize(horizontal: false, vertical: true)
+        .onAppear { preferences.refreshLaunchAtLoginStatus() }
     }
 }

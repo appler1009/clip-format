@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         monitor.refresh(force: true)
+        // The user may have removed us from Login Items while we were inactive.
+        preferences.refreshLaunchAtLoginStatus()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
