@@ -4,7 +4,7 @@ A free macOS menu-bar app that shows you the JSON on your clipboard, formatted â
 
 Copy some JSON, and the menu-bar icon turns green. Click it, and there's your payload, indented and syntax-coloured. Press Space on a `.json` file in Finder, and you get the same view.
 
-Revival of the 2016 ClipFormat. Still free, still no paywall.
+Still free, still no paywall.
 
 ## What it does
 
