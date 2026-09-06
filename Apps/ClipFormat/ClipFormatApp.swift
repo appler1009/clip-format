@@ -7,11 +7,10 @@ struct ClipFormatApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        // The UI lives in a status item and its popover; this scene exists only
-        // to satisfy the SwiftUI lifecycle. LSUIElement keeps us out of the Dock.
-        Settings {
-            PreferencesView(preferences: .shared)
-        }
+        // The UI lives in a status item, its popover, and a settings window the
+        // delegate owns. This scene exists only to satisfy the SwiftUI
+        // lifecycle; LSUIElement keeps the app out of the Dock.
+        Settings { EmptyView() }
     }
 }
 
@@ -23,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = Preferences.shared
     private var cancellables: Set<AnyCancellable> = []
     private var eventMonitor: Any?
+    private let preferencesWindow = PreferencesWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
@@ -44,8 +44,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor.start()
         Diagnostics.info("launched", ["version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"])
 
-        // QA hook: `open ClipFormat.app --args --show-popover` brings the
-        // popover up without a click, for screenshots and manual checks.
+        // QA hooks: `open ClipFormat.app --args --show-popover` (or
+        // --show-preferences) brings the UI up without a click. A popover in an
+        // agent app is not exposed to Accessibility, so this is the only way to
+        // drive it from a script.
+        if ProcessInfo.processInfo.arguments.contains("--show-preferences") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.openPreferences()
+            }
+        }
         if ProcessInfo.processInfo.arguments.contains("--show-popover") {
             // The status button has no window yet at launch, so a popover
             // anchored to it would have nowhere to appear.
@@ -169,8 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openPreferences() {
         popover.performClose(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        preferencesWindow.show(preferences: preferences)
     }
 
     @objc private func showAbout() {
