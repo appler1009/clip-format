@@ -1,0 +1,8 @@
+{
+  "name": "ClipFormat",
+  "version": "1.0",
+  "free": true,
+  "tags": ["menu bar", "quick look", "json"],
+  "window": { "width": 520, "maxHeight": 560 },
+  "release": { "date": "2026-09-05", "notes": null, "downloads": 0 }
+}

@@ -1,0 +1,161 @@
+import AppKit
+import Combine
+import SwiftUI
+
+@main
+struct ClipFormatApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+
+    var body: some Scene {
+        // The UI lives in a status item and its popover; this scene exists only
+        // to satisfy the SwiftUI lifecycle. LSUIElement keeps us out of the Dock.
+        Settings {
+            PreferencesView(preferences: .shared)
+        }
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusItem: NSStatusItem!
+    private let popover = NSPopover()
+    private let monitor = ClipboardMonitor()
+    private let preferences = Preferences.shared
+    private var cancellables: Set<AnyCancellable> = []
+    private var eventMonitor: Any?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        configureStatusItem()
+        configurePopover()
+
+        // Re-render the icon whenever the clipboard state or the badge
+        // preference changes.
+        monitor.$document
+            .map(\.isValid)
+            .removeDuplicates()
+            .combineLatest(preferences.$showBadge)
+            .sink { [weak self] _, _ in self?.updateIcon() }
+            .store(in: &cancellables)
+
+        monitor.start()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        monitor.refresh(force: true)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        monitor.stop()
+        removeDismissMonitor()
+    }
+
+    // MARK: - Status item
+
+    private func configureStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        guard let button = statusItem.button else { return }
+        button.target = self
+        button.action = #selector(statusItemClicked(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        updateIcon()
+    }
+
+    private func updateIcon() {
+        let state: StatusItemIcon.State
+        if !preferences.showBadge {
+            state = .neutral
+        } else {
+            state = monitor.document.isValid ? .valid : .invalid
+        }
+        statusItem?.button?.image = StatusItemIcon.image(for: state)
+    }
+
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        let isRightClick = NSApp.currentEvent?.type == .rightMouseUp
+            || NSApp.currentEvent?.modifierFlags.contains(.control) == true
+        if isRightClick {
+            showMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
+    private func showMenu() {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Show Clipboard JSON", action: #selector(togglePopover), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
+        menu.addItem(withTitle: "About ClipFormat", action: #selector(showAbout), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit ClipFormat", action: #selector(quit), keyEquivalent: "q")
+        menu.items.forEach { $0.target = self }
+
+        // Attaching the menu to the status item would hijack left clicks, so
+        // pop it manually and detach again immediately.
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    // MARK: - Popover
+
+    private func configurePopover() {
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentViewController = NSHostingController(
+            rootView: PopoverView(
+                monitor: monitor,
+                preferences: preferences,
+                openPreferences: { [weak self] in self?.openPreferences() },
+                quit: { [weak self] in self?.quit() }
+            )
+        )
+    }
+
+    @objc private func togglePopover() {
+        if popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        guard let button = statusItem.button else { return }
+        monitor.refresh(force: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+        installDismissMonitor()
+    }
+
+    /// `.transient` misses clicks in other apps' windows in an agent app, so we
+    /// watch globally and close ourselves.
+    private func installDismissMonitor() {
+        removeDismissMonitor()
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor in self?.popover.performClose(nil) }
+        }
+    }
+
+    private func removeDismissMonitor() {
+        if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+        eventMonitor = nil
+    }
+
+    // MARK: - Menu actions
+
+    @objc private func openPreferences() {
+        popover.performClose(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    @objc private func showAbout() {
+        popover.performClose(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "ClipFormat",
+            .init(rawValue: "Copyright"): "Revived. Formats JSON in the menu bar and in Quick Look.",
+        ])
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
+    }
+}

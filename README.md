@@ -1,0 +1,77 @@
+# ClipFormat
+
+A free macOS menu-bar app that shows you the JSON on your clipboard, formatted — and brings the same formatting to Finder's Quick Look.
+
+Copy some JSON, and the menu-bar icon turns green. Click it, and there's your payload, indented and syntax-coloured. Press Space on a `.json` file in Finder, and you get the same view.
+
+Revival of the 2016 ClipFormat. Still free, still no paywall.
+
+## What it does
+
+- **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds valid JSON, a red ✕ when it doesn't.
+- **Click for the formatted view** — syntax-coloured, selectable, scrollable, with **Copy Pretty** and **Copy Minified**.
+- **Quick Look for `.json` files** — Spacebar in Finder renders through the same code the popover uses.
+- **Tells you what's wrong** — invalid JSON gets the parse error with a line and column, plus an excerpt of what was actually on the clipboard.
+- **Stays out of the way** — no Dock icon (`LSUIElement`), no clipboard rewriting, no history stored anywhere.
+
+Object keys keep their source order, and number literals survive verbatim: `1.50` stays `1.50`, `1e9` stays `1e9`. `JSONSerialization` gives up both, which is why there's a hand-rolled parser here.
+
+## Build and run
+
+Requires macOS 14+ and Xcode 15+. The project file is generated, so [XcodeGen](https://github.com/yonaskolb/XcodeGen) is the one dependency:
+
+```sh
+brew install xcodegen
+xcodegen generate
+open ClipFormat.xcodeproj
+```
+
+Then build and run the **ClipFormat** scheme. The Quick Look extension is embedded in the app and registers with the system when the app is launched from a stable location — move the built app to `/Applications` and open it once.
+
+Shared-core tests run without Xcode:
+
+```sh
+cd Shared/ClipFormatShared && swift test
+```
+
+## Layout
+
+```
+Apps/ClipFormat/            Menu-bar host: status item, popover, preferences
+Extensions/ClipFormatPreview/  Quick Look preview extension (com.apple.quicklook.preview)
+Shared/ClipFormatShared/    Parser, pretty printer, theme, HTML + AttributedString renderers
+Fixtures/                   Sample .json files, including invalid and large ones
+
+```
+
+The rule the layout enforces: **the popover and Quick Look call the same functions.** Both render the same `[JSONToken]` stream through the same `Theme`, one to `AttributedString` and one to HTML, so they cannot drift apart.
+
+## Preferences
+
+Right-click the menu-bar icon → Preferences.
+
+- **Indent** — 2, 4, or 8 spaces
+- **Show ✓ / ✕ badge** — off gives you plain template braces
+- **Launch at login** — via `SMAppService`
+
+## Quick Look not updating?
+
+Quick Look caches aggressively, and other handlers compete for `public.json`.
+
+```sh
+qlmanage -r && qlmanage -r cache     # reload generators and clear the cache
+qlmanage -m plugins | grep -i clip   # confirm ClipFormat is registered
+```
+
+If it still doesn't attach: keep the app in `/Applications`, open it once, and check **System Settings → General → Login Items & Extensions → Quick Look**.
+
+## Limits
+
+- The menu-bar badge deliberately ignores bare literals — copying `42` or `"hello"` is technically valid JSON but flagging it would make the badge meaningless. Objects and arrays count.
+- Formatted output is capped at 500,000 characters on screen; past that the view is truncated with a notice. **Copy Pretty** still gives you the whole thing.
+- Sources over 32 MB aren't parsed; Quick Look reads at most the first 8 MB of a file.
+- The Quick Look extension always indents by 2. It's sandboxed and can't read the app's preferences without an app group, which would mean a paid signing identity.
+
+## Roadmap
+
+Thumbnail extension, JSONC / NDJSON / GeoJSON, collapsible tree view and key-path copy, secret masking for `password` / `token` keys, and the 2016 app's other formats — XML, stack traces, Base64 and URL decoding.
