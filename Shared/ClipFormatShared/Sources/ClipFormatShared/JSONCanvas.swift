@@ -77,7 +77,9 @@ public enum JSONCanvas {
     /// Renders a full standalone HTML document.
     /// - Parameter appearance: pass `nil` to follow the host's colour scheme via
     ///   `prefers-color-scheme`, or force one for hosts that report it directly.
-    public static func html(from document: PrettyJSONDocument, appearance: Appearance? = nil) -> String {
+    public static func html(from document: PrettyJSONDocument,
+                            appearance: Appearance? = nil,
+                            fontSize: CGFloat = 12) -> String {
         let body: String
         if document.isValid {
             var code = ""
@@ -110,24 +112,26 @@ public enum JSONCanvas {
         return """
         <!doctype html>
         <html><head><meta charset="utf-8">
-        <style>\(css(appearance: appearance))</style>
+        <style>\(css(appearance: appearance, fontSize: fontSize, tabSize: document.indent))</style>
         </head><body>\(body)</body></html>
         """
     }
 
-    private static func css(appearance: Appearance?) -> String {
+    private static func css(appearance: Appearance?, fontSize: CGFloat, tabSize: Int) -> String {
+        let px = String(format: "%.1f", fontSize)
+        let tabs = max(2, tabSize)
         let base = """
         :root { color-scheme: light dark; }
         * { box-sizing: border-box; }
         body {
           margin: 0;
           padding: 14px 18px;
-          font: 12.5px/1.55 ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+          font: \(px)px/1.55 ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
           background: var(--bg);
           color: var(--fg);
           -webkit-font-smoothing: antialiased;
         }
-        pre.json, pre.raw { margin: 0; white-space: pre; tab-size: 2; }
+        pre.json, pre.raw { margin: 0; white-space: pre; tab-size: \(tabs); }
         pre.raw {
           white-space: pre-wrap;
           word-break: break-word;

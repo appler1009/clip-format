@@ -15,7 +15,7 @@ struct PreferencesView: View {
                 Stepper(value: $preferences.fontSize, in: Preferences.minFontSize...Preferences.maxFontSize) {
                     Text("Font size: \(preferences.fontSize) pt")
                 }
-                Text("In the popover, ⌘+ and ⌘− change the size.")
+                Text("⌘+ / ⌘− in the popover change the size. Quick Look uses these values the next time you press Space.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -43,7 +43,7 @@ struct PreferencesView: View {
             }
 
             Section("Quick Look") {
-                Text("Quick Look uses the same formatting at a fixed 2-space indent. If Spacebar previews of .json files don’t change, keep ClipFormat in Applications, open it once, then run `qlmanage -r` in Terminal.")
+                Text("Quick Look reads indent and font size from the same App Group as this window. If Spacebar previews don’t change, keep ClipFormat in Applications, open it once, then run `qlmanage -r` in Terminal.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

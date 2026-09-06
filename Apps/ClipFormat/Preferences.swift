@@ -1,20 +1,21 @@
+import ClipFormatShared
 import Foundation
 import ServiceManagement
 import SwiftUI
 
-/// User settings, stored in `UserDefaults` and observed by the whole app.
+/// User settings, stored in the App Group suite so Quick Look can read them.
 @MainActor
 final class Preferences: ObservableObject {
     static let shared = Preferences()
 
-    static let minFontSize = 9
-    static let maxFontSize = 28
-    static let defaultFontSize = 12
+    static let minFontSize = AppGroup.minFontSize
+    static let maxFontSize = AppGroup.maxFontSize
+    static let defaultFontSize = AppGroup.defaultFontSize
 
     private enum Key {
-        static let indent = "indentWidth"
-        static let showBadge = "showBadge"
-        static let fontSize = "fontSize"
+        static let indent = AppGroup.Key.indentWidth
+        static let showBadge = AppGroup.Key.showBadge
+        static let fontSize = AppGroup.Key.fontSize
     }
 
     private let defaults: UserDefaults
@@ -53,10 +54,11 @@ final class Preferences: ObservableObject {
     /// that LaunchServices knows about, which a bare Xcode build is not.
     @Published private(set) var launchAtLoginError: String?
 
-    private init(defaults: UserDefaults = .standard) {
+    private init(defaults: UserDefaults = AppGroup.defaults) {
+        Self.migrateStandardDefaultsIfNeeded(to: defaults)
         self.defaults = defaults
         defaults.register(defaults: [
-            Key.indent: 2,
+            Key.indent: AppGroup.defaultIndentWidth,
             Key.showBadge: true,
             Key.fontSize: Self.defaultFontSize,
         ])
@@ -64,6 +66,23 @@ final class Preferences: ObservableObject {
         showBadge = defaults.bool(forKey: Key.showBadge)
         fontSize = defaults.integer(forKey: Key.fontSize)
         launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    /// Copies indent / font / badge out of the old per-app defaults so a
+    /// first launch after the App Group lands does not reset them.
+    private static func migrateStandardDefaultsIfNeeded(to suite: UserDefaults) {
+        let standard = UserDefaults.standard
+        guard suite !== standard else { return }
+        guard suite.object(forKey: Key.indent) == nil else { return }
+        if standard.object(forKey: Key.indent) != nil {
+            suite.set(standard.integer(forKey: Key.indent), forKey: Key.indent)
+        }
+        if standard.object(forKey: Key.fontSize) != nil {
+            suite.set(standard.integer(forKey: Key.fontSize), forKey: Key.fontSize)
+        }
+        if standard.object(forKey: Key.showBadge) != nil {
+            suite.set(standard.bool(forKey: Key.showBadge), forKey: Key.showBadge)
+        }
     }
 
     func increaseFontSize() {

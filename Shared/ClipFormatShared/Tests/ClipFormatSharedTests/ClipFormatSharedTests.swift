@@ -146,6 +146,23 @@ final class JSONCanvasTests: XCTestCase {
         XCTAssertGreaterThan(document.prettyText?.count ?? 0, JSONCanvas.renderCharacterLimit)
     }
 
+    func testHTMLUsesRequestedFontSizeAndTabSize() {
+        let document = JSONCanvas.model(from: #"{"a":1}"#, indent: 4)
+        let html = JSONCanvas.html(from: document, appearance: .light, fontSize: 18)
+        XCTAssertTrue(html.contains("font: 18.0px/1.55"))
+        XCTAssertTrue(html.contains("tab-size: 4"))
+    }
+
+    func testSharedFormattingPreferencesClampAndLoad() {
+        XCTAssertEqual(SharedFormattingPreferences(indentWidth: 8, fontSize: 99).fontSize, AppGroup.maxFontSize)
+        let suite = UserDefaults(suiteName: "clipformat.tests.prefs")!
+        suite.removePersistentDomain(forName: "clipformat.tests.prefs")
+        suite.set(4, forKey: AppGroup.Key.indentWidth)
+        suite.set(18, forKey: AppGroup.Key.fontSize)
+        XCTAssertEqual(SharedFormattingPreferences.load(from: suite),
+                       SharedFormattingPreferences(indentWidth: 4, fontSize: 18))
+    }
+
     func testHTMLKeepsOneSpanPerColouredRun() {
         let html = JSONCanvas.html(from: JSONCanvas.model(from: #"{"a":"b"}"#), appearance: .light)
         // Key, ':' and value each get one span; whitespace and newlines stay bare.

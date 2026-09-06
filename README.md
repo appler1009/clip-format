@@ -34,6 +34,16 @@ Shared-core tests run without Xcode:
 cd Shared/ClipFormatShared && swift test
 ```
 
+### App Group (Quick Look prefs)
+
+Both binaries already request `group.com.appler1009.ClipFormat`. On a paid team, register that group once so signing can share it:
+
+1. [developer.apple.com/account](https://developer.apple.com/account) → **Identifiers** → **App Groups** → register `group.com.appler1009.ClipFormat`.
+2. Edit App IDs `com.appler1009.ClipFormat` and `com.appler1009.ClipFormat.Preview` → enable **App Groups** → tick that group.
+3. Or in Xcode: each target → **Signing & Capabilities** → **+ Capability** → **App Groups** → check the same id. Automatic signing refreshes the profiles.
+
+Without that portal step, each process gets its own defaults file and Quick Look stays on the built-in 2-space / 12 pt defaults.
+
 ## Layout
 
 ```
@@ -50,8 +60,8 @@ The rule the layout enforces: **the popover and Quick Look call the same functio
 
 Right-click the menu-bar icon → Preferences.
 
-- **Indent** — 2, 4, or 8 spaces
-- **Font size** — 9–28 pt for the popover JSON; ⌘+ / ⌘− also change it while the popover is open
+- **Indent** — 2, 4, or 8 spaces (popover and Quick Look)
+- **Font size** — 9–28 pt for the popover JSON; ⌘+ / ⌘− also change it while the popover is open. Quick Look uses the last saved size on the next Spacebar.
 - **Show ✓ / ✕ badge** — off gives you plain template braces
 - **Launch at login** — via `SMAppService`
 
@@ -109,7 +119,7 @@ be notarized for distribution.
 - The menu-bar badge deliberately ignores bare literals — copying `42` or `"hello"` is technically valid JSON but flagging it would make the badge meaningless. Objects and arrays count.
 - Formatted output is capped at 500,000 characters on screen; past that the view is truncated with a notice. **Copy Pretty** still gives you the whole thing.
 - Sources over 32 MB aren't parsed; Quick Look reads at most the first 8 MB of a file.
-- The Quick Look extension always indents by 2. It's sandboxed and can't read the app's preferences without an app group, which would mean a paid signing identity.
+- Quick Look is a snapshot: change indent or font size, then press Space again (or `qlmanage -r`) to see it. The preview does not live-update.
 
 ## Roadmap
 
