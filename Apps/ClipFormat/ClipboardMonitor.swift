@@ -27,9 +27,12 @@ final class ClipboardMonitor: ObservableObject {
         self.lastChangeCount = pasteboard.changeCount - 1
         self.document = JSONCanvas.model(from: "", indent: preferences.indentWidth)
 
+        // The new indent has to come from the stream: `@Published` fires in
+        // `willSet`, so reading `preferences.indentWidth` here would re-render
+        // with the value the user just replaced.
         indentObservation = preferences.$indentWidth
             .dropFirst()
-            .sink { [weak self] _ in self?.refresh(force: true) }
+            .sink { [weak self] indent in self?.refresh(force: true, indent: indent) }
     }
 
     func start(interval: TimeInterval = 0.75) {
@@ -48,17 +51,17 @@ final class ClipboardMonitor: ObservableObject {
         timer = nil
     }
 
-    func refresh(force: Bool = false) {
+    func refresh(force: Bool = false, indent: Int? = nil) {
+        let indent = indent ?? preferences.indentWidth
         let changeCount = pasteboard.changeCount
         guard force || changeCount != lastChangeCount else { return }
         lastChangeCount = changeCount
 
         guard let text = readText() else {
-            document = JSONCanvas.model(from: "", indent: preferences.indentWidth)
+            document = JSONCanvas.model(from: "", indent: indent)
             return
         }
 
-        let indent = preferences.indentWidth
         guard text.utf8.count > Self.asyncThreshold else {
             document = JSONCanvas.model(from: text, indent: indent)
             return

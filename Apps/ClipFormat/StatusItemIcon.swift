@@ -88,8 +88,13 @@ enum StatusItemIcon {
         color.setFill()
         NSBezierPath(ovalIn: badgeRect).fill()
 
+        // The glyph is coloured through a palette configuration. Tinting it the
+        // way the braces are tinted — draw, then fill .sourceAtop — would paint
+        // the whole rect, badge circle included, solid white.
+        let configuration = NSImage.SymbolConfiguration(pointSize: 6.5, weight: .black)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
         let glyph = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 6, weight: .bold))
+            .withSymbolConfiguration(configuration)
         guard let glyph else { return }
         let glyphRect = NSRect(
             x: badgeRect.midX - glyph.size.width / 2,
@@ -97,10 +102,8 @@ enum StatusItemIcon {
             width: glyph.size.width,
             height: glyph.size.height
         )
-        NSColor.white.set()
         glyph.draw(in: glyphRect, from: .zero, operation: .sourceOver, fraction: 1,
                    respectFlipped: true, hints: nil)
-        glyphRect.fill(using: .sourceAtop)
     }
 }
 
@@ -119,3 +122,4 @@ private extension NSRect {
         NSGraphicsContext.current?.compositingOperation = .sourceOver
     }
 }
+

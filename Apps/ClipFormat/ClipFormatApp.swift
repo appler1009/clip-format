@@ -29,15 +29,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configurePopover()
 
         // Re-render the icon whenever the clipboard state or the badge
-        // preference changes.
+        // preference changes. The published values have to come from the
+        // stream: `@Published` fires in `willSet`, so reading the property
+        // inside the sink would render the *previous* state.
         monitor.$document
             .map(\.isValid)
             .removeDuplicates()
             .combineLatest(preferences.$showBadge)
-            .sink { [weak self] _, _ in self?.updateIcon() }
+            .sink { [weak self] isValid, showBadge in
+                self?.updateIcon(isValid: isValid, showBadge: showBadge)
+            }
             .store(in: &cancellables)
 
         monitor.start()
+        Diagnostics.info("launched", ["version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"])
+
+        // QA hook: `open ClipFormat.app --args --show-popover` brings the
+        // popover up without a click, for screenshots and manual checks.
+        if ProcessInfo.processInfo.arguments.contains("--show-popover") {
+            // The status button has no window yet at launch, so a popover
+            // anchored to it would have nowhere to appear.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                NSApp.activate(ignoringOtherApps: true)
+                self?.togglePopover()
+                guard let self else { return }
+                Diagnostics.info("qa popover requested", [
+                    "isShown": "\(self.popover.isShown)",
+                    "contentSize": "\(self.popover.contentSize)",
+                    "viewFrame": "\(self.popover.contentViewController?.view.frame ?? .zero)",
+                    "popoverWindow": "\(String(describing: self.popover.contentViewController?.view.window?.frame))",
+                ])
+            }
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -62,13 +85,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateIcon()
     }
 
-    private func updateIcon() {
-        let state: StatusItemIcon.State
-        if !preferences.showBadge {
-            state = .neutral
-        } else {
-            state = monitor.document.isValid ? .valid : .invalid
-        }
+    private func updateIcon(isValid: Bool? = nil, showBadge: Bool? = nil) {
+        let showBadge = showBadge ?? preferences.showBadge
+        let isValid = isValid ?? monitor.document.isValid
+        let state: StatusItemIcon.State = showBadge ? (isValid ? .valid : .invalid) : .neutral
         statusItem?.button?.image = StatusItemIcon.image(for: state)
     }
 
@@ -104,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configurePopover() {
         popover.behavior = .transient
         popover.animates = true
-        popover.contentViewController = NSHostingController(
+        let hosting = NSHostingController(
             rootView: PopoverView(
                 monitor: monitor,
                 preferences: preferences,
@@ -112,6 +132,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 quit: { [weak self] in self?.quit() }
             )
         )
+        // Without an explicit sizing policy the hosting controller reports a
+        // zero preferred size and the popover opens invisibly.
+        hosting.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hosting
+        popover.contentSize = NSSize(width: 520, height: 420)
     }
 
     @objc private func togglePopover() {

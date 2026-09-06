@@ -38,8 +38,13 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.appler1009.ClipFormat
         INFOPLIST_FILE: Apps/ClipFormat/Info.plist
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_ENTITLEMENTS: Apps/ClipFormat/ClipFormat.entitlements
         COMBINE_HIDPI_IMAGES: YES
+      configs:
+        # Debug adds only one thing: outbound network, for LogDock diagnostics.
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: Apps/ClipFormat/ClipFormat.debug.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: Apps/ClipFormat/ClipFormat.entitlements
 
   ClipFormatPreview:
     type: app-extension

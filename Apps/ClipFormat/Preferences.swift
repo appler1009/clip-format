@@ -64,7 +64,7 @@ final class Preferences: ObservableObject {
             }
             launchAtLoginError = nil
         } catch {
-            NSLog("ClipFormat: launch at login change failed — \(error.localizedDescription)")
+            Diagnostics.error("launch at login change failed", ["error": error.localizedDescription])
             launchAtLoginError = Self.explain(error)
             // Snap the toggle back to what the system actually thinks.
             launchAtLogin = SMAppService.mainApp.status == .enabled
