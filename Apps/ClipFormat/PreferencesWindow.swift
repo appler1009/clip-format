@@ -19,7 +19,7 @@ final class PreferencesWindowController {
         }
 
         let hosting = NSHostingController(rootView: PreferencesView(preferences: preferences))
-        let window = NSWindow(contentViewController: hosting)
+        let window = EscapableWindow(contentViewController: hosting)
         window.title = "ClipFormat Settings"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
@@ -28,5 +28,12 @@ final class PreferencesWindowController {
 
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+}
+
+/// A titled window whose Escape key is Close, like a sheet or Preferences panel.
+private final class EscapableWindow: NSWindow {
+    override func cancelOperation(_ sender: Any?) {
+        close()
     }
 }
