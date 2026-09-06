@@ -16,6 +16,10 @@ jobs:
   release:
     name: Build and publish
     runs-on: macos-latest
+    # The `secrets` context is not available in a step-level `if`, so the one
+    # value the conditional needs is hoisted to the job environment.
+    env:
+      CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,9 +49,8 @@ jobs:
       # Developer ID certificate exists. Set the secrets to get a notarized,
       # Gatekeeper-clean build.
       - name: Import signing certificate
-        if: ${{ secrets.CERTIFICATE_P12 != '' }}
+        if: env.CERTIFICATE_P12 != ''
         env:
-          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
         run: |
           keychain="$RUNNER_TEMP/build.keychain"
