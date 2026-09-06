@@ -6,10 +6,17 @@
 # script still produces an unsigned .app, .zip and .dmg, which is enough for
 # local testing but will trip Gatekeeper on anyone else's Mac.
 #
-#   SIGNING_IDENTITY   e.g. "Developer ID Application: Your Name (TEAMID)"
-#   TEAM_ID            Apple Developer team identifier
-#   NOTARY_APPLE_ID    Apple ID used for notarization
-#   NOTARY_PASSWORD    app-specific password for that Apple ID
+#   SIGNING_IDENTITY              e.g. "Developer ID Application: Your Name (TEAMID)"
+#   TEAM_ID                       Apple Developer team identifier
+#   NOTARY_APPLE_ID               Apple ID used for notarization
+#   NOTARY_PASSWORD               app-specific password for that Apple ID
+#   PROVISIONING_PROFILE_APP      base64 of the Developer ID profile for
+#                                 com.appler1009.ClipFormat
+#   PROVISIONING_PROFILE_PREVIEW  base64 of the Developer ID profile for
+#                                 com.appler1009.ClipFormat.Preview
+#
+# App Groups mean a Developer ID *certificate* is not enough — both binaries
+# need a Developer ID provisioning profile or xcodebuild refuses to sign.
 #
 # Usage: Scripts/package.sh [version] [build-number]
 
@@ -33,13 +40,42 @@ echo "==> Generating project"
 xcodegen generate
 
 echo "==> Building ClipFormat $VERSION ($BUILD_NUMBER)"
+install_profile() {
+  local encoded=$1
+  local label=$2
+  local dir="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+  mkdir -p "$dir"
+  local tmp
+  tmp=$(mktemp)
+  printf '%s' "$encoded" | base64 --decode > "$tmp"
+  local uuid
+  uuid=$(security cms -D -i "$tmp" | plutil -extract UUID raw -)
+  if [[ -z "$uuid" ]]; then
+    echo "error: $label is not a readable provisioning profile" >&2
+    exit 1
+  fi
+  mv "$tmp" "$dir/$uuid.provisionprofile"
+  echo "$uuid"
+}
+
 signing_args=(CODE_SIGNING_ALLOWED=NO)
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
+  if [[ -z "${PROVISIONING_PROFILE_APP:-}" || -z "${PROVISIONING_PROFILE_PREVIEW:-}" ]]; then
+    echo "error: App Groups require Developer ID provisioning profiles." >&2
+    echo "       set PROVISIONING_PROFILE_APP and PROVISIONING_PROFILE_PREVIEW" >&2
+    echo "       (base64 of the .provisionprofile for the app and the appex)." >&2
+    exit 1
+  fi
+  echo "==> Installing provisioning profiles"
+  app_profile=$(install_profile "$PROVISIONING_PROFILE_APP" "PROVISIONING_PROFILE_APP")
+  preview_profile=$(install_profile "$PROVISIONING_PROFILE_PREVIEW" "PROVISIONING_PROFILE_PREVIEW")
   signing_args=(
     CODE_SIGN_STYLE=Manual
     CODE_SIGN_IDENTITY="$SIGNING_IDENTITY"
     DEVELOPMENT_TEAM="${TEAM_ID:-}"
     OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
+    APP_PROVISIONING_PROFILE="$app_profile"
+    PREVIEW_PROVISIONING_PROFILE="$preview_profile"
   )
 fi
 

@@ -109,6 +109,14 @@ clean install, set these repository secrets:
 | `TEAM_ID` | Apple Developer team identifier |
 | `NOTARY_APPLE_ID` | Apple ID for notarization |
 | `NOTARY_PASSWORD` | app-specific password for that Apple ID |
+| `PROVISIONING_PROFILE_APP` | base64 of the Developer ID profile for `com.appler1009.ClipFormat` |
+| `PROVISIONING_PROFILE_PREVIEW` | base64 of the Developer ID profile for `com.appler1009.ClipFormat.Preview` |
+
+App Groups require those two **Developer ID** provisioning profiles — the certificate alone is not enough. Create them under Identifiers → Profiles (type *Developer ID*, macOS, the matching App ID, your Developer ID Application cert), then:
+
+```sh
+base64 -i ClipFormat.provisionprofile | pbcopy
+```
 
 Note that a *Developer ID Application* certificate is required — an *Apple
 Development* certificate signs builds that run on your own machine but cannot

@@ -71,6 +71,8 @@ jobs:
           TEAM_ID: ${{ secrets.TEAM_ID }}
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          PROVISIONING_PROFILE_APP: ${{ secrets.PROVISIONING_PROFILE_APP }}
+          PROVISIONING_PROFILE_PREVIEW: ${{ secrets.PROVISIONING_PROFILE_PREVIEW }}
         run: Scripts/package.sh "${{ steps.version.outputs.version }}" "${{ github.run_number }}"
 
       - name: Extract release notes
