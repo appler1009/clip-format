@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (must match project.yml)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          project_version=$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml | head -1)
+          if [ "$version" != "$project_version" ]; then
+            echo "::error::tag v$version does not match MARKETING_VERSION $project_version in project.yml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test shared core
+        working-directory: Shared/ClipFormatShared
+        run: swift test
+
+      # Signing is optional so the workflow still produces artifacts before a
+      # Developer ID certificate exists. Set the secrets to get a notarized,
+      # Gatekeeper-clean build.
+      - name: Import signing certificate
+        if: ${{ secrets.CERTIFICATE_P12 != '' }}
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychain -d user -s "$keychain" login.keychain
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
+      - name: Build, notarize and package
+        env:
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: Scripts/package.sh "${{ steps.version.outputs.version }}" "${{ github.run_number }}"
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          # The section for this version, up to the next "## " heading.
+          awk -v v="## $version" '
+            $0 ~ "^"v {found=1; next}
+            found && /^## / {exit}
+            found {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "ClipFormat $version" > release-notes.md
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "ClipFormat ${{ steps.version.outputs.version }}" \
+            --notes-file release-notes.md \
+            dist/ClipFormat-${{ steps.version.outputs.version }}.dmg \
+            dist/ClipFormat-${{ steps.version.outputs.version }}.zip \
+            dist/SHA256SUMS.txt

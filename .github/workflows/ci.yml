@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test and build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test shared core
+        working-directory: Shared/ClipFormatShared
+        run: swift test
+
+      - name: Generate project
+        run: xcodegen generate
+
+      # Unsigned: CI has no Developer ID, and the build is only here to catch
+      # compile errors in the app and extension targets.
+      - name: Build app and extension
+        run: |
+          xcodebuild \
+            -project ClipFormat.xcodeproj \
+            -scheme ClipFormat \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            build

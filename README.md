@@ -66,6 +66,44 @@ qlmanage -m plugins | grep -i clip   # confirm ClipFormat is registered
 
 If it still doesn't attach: keep the app in `/Applications`, open it once, and check **System Settings → General → Login Items & Extensions → Quick Look**.
 
+## Releasing
+
+`MARKETING_VERSION` in `project.yml` is the single source of truth for the
+version — currently **0.1.0**. Everything else derives from it, and the release
+workflow fails the build if a pushed tag disagrees, so the two can't drift.
+
+To cut a release: bump `MARKETING_VERSION`, add a matching `## <version>`
+section to [CHANGELOG.md](CHANGELOG.md) (its body becomes the release notes),
+commit, then push a tag.
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+GitHub Actions builds, signs, notarizes, staples, and publishes a `.dmg`, a
+`.zip` and `SHA256SUMS.txt` to the release. The same script runs locally:
+
+```sh
+Scripts/package.sh          # unsigned build into dist/
+```
+
+Signing and notarization are optional — without credentials the script still
+produces artifacts, they just trip Gatekeeper on someone else's Mac. To get a
+clean install, set these repository secrets:
+
+| Secret | What it is |
+| --- | --- |
+| `CERTIFICATE_P12` | base64 of a **Developer ID Application** certificate export (`base64 -i cert.p12`) |
+| `CERTIFICATE_PASSWORD` | password used for that export |
+| `SIGNING_IDENTITY` | e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `TEAM_ID` | Apple Developer team identifier |
+| `NOTARY_APPLE_ID` | Apple ID for notarization |
+| `NOTARY_PASSWORD` | app-specific password for that Apple ID |
+
+Note that a *Developer ID Application* certificate is required — an *Apple
+Development* certificate signs builds that run on your own machine but cannot
+be notarized for distribution.
+
 ## Limits
 
 - The menu-bar badge deliberately ignores bare literals — copying `42` or `"hello"` is technically valid JSON but flagging it would make the badge meaningless. Objects and arrays count.
