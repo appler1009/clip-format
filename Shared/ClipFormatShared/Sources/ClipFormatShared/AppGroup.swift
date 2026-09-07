@@ -7,7 +7,7 @@ import Foundation
 /// signing then stamps both binaries; without that step the suite is just
 /// a private defaults file the extension cannot see.
 public enum AppGroup {
-    public static let identifier = "group.com.appler1009.ClipFormat"
+    public static let identifier = "TN2RQ5P647.group.com.appler1009.ClipFormat"
 
     /// Preference keys written by the app and read by Quick Look.
     public enum Key {
