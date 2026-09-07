@@ -6,6 +6,10 @@ public struct PrettyJSONDocument: Sendable {
     public let source: String
     public let indent: Int
     public let value: JSONValue?
+    /// Short label for the failure state, shown as the badge in both hosts.
+    /// "Not JSON" is right for most failures but wrong for a file we refused
+    /// to read on size alone, which may well be perfectly good JSON.
+    public let errorTitle: String
     public let errorMessage: String?
     /// True when the formatted output was too long to show in full and the
     /// token stream stops early.
@@ -18,10 +22,13 @@ public struct PrettyJSONDocument: Sendable {
 
     public var isValid: Bool { value != nil }
 
-    public init(source: String, indent: Int, value: JSONValue?, errorMessage: String?, isTruncated: Bool = false) {
+    public init(source: String, indent: Int, value: JSONValue?,
+                errorTitle: String = "Not JSON", errorMessage: String?,
+                isTruncated: Bool = false) {
         self.source = source
         self.indent = indent
         self.value = value
+        self.errorTitle = errorTitle
         self.errorMessage = errorMessage
 
         guard let value else {
