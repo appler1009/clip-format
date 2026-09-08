@@ -6,16 +6,18 @@ workflow refuses to build a tag that disagrees with it.
 
 ## Unreleased
 
-- JSON with comments. `.jsonc` files, and any `.json` that tooling has
-  commented — `tsconfig.json`, VS Code settings — are read instead of refused.
-  Both `//` to end of line and `/* … */` count, anywhere whitespace is allowed.
+- JSONC. `.jsonc` files, and any `.json` that tooling has written loosely —
+  `tsconfig.json`, VS Code settings — are read instead of refused: `//` and
+  `/* … */` comments, and a comma before the closing brace or bracket.
 - The torn-off window can go full screen; the green button offered only zoom
   before. Its remembered frame is unaffected by the transition.
 
 Strict JSON is still tried first and is never re-read loosely, so a document
-that parses as RFC 8259 JSON is reported as JSON. Comments are read but not
-kept: formatting comes from the parsed value, so the comments are not in the
-formatted output.
+that parses as RFC 8259 JSON is reported as JSON. Two consequences worth
+knowing: a trailing comma is no longer an error anywhere, since such a document
+is valid JSONC; and neither comments nor trailing commas survive the
+formatting, because the output is rebuilt from the parsed value — `{"a":1,}`
+comes back as `{"a":1}`.
 
 ## 0.3.0
 

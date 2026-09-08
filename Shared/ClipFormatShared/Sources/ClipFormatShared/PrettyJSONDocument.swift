@@ -6,8 +6,9 @@ public enum DocumentKind: String, Sendable, Equatable {
     case json
     /// JSON Lines (also called NDJSON): one JSON value per line.
     case lineDelimited
-    /// JSON with comments, as in JSONC and `tsconfig.json`.
-    case commented
+    /// JSONC: JSON with comments and trailing commas, as `tsconfig.json` and
+    /// VS Code settings are written.
+    case jsonc
 }
 
 /// The result of trying to read some text as JSON: what both hosts render.

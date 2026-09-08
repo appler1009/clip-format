@@ -59,6 +59,14 @@ public enum JSONParser {
         /// default: RFC 8259 has no comments, and accepting them everywhere
         /// would make the strict reading a lie.
         public static let comments = Options(rawValue: 1 << 0)
+
+        /// Accept a comma before the closing `}` or `]`. Tooling writes these
+        /// next to comments — `tsconfig.json` has both — and a diff that adds
+        /// one line should not have to touch the line above it.
+        public static let trailingCommas = Options(rawValue: 1 << 1)
+
+        /// What a `.jsonc` file is allowed: comments and trailing commas.
+        public static let jsonc: Options = [.comments, .trailingCommas]
     }
 
     public static func parse(_ text: String, options: Options = []) throws -> JSONValue {
@@ -159,6 +167,24 @@ public enum JSONParser {
             }
         }
 
+        /// Consumes the comma, and reports whether the collection closed right
+        /// after it. Whatever separates the two is skipped first, so the shape
+        /// VS Code actually writes still parses:
+        ///
+        ///     "strict": true, // always
+        ///     }
+        ///
+        /// Strict JSON never takes this path: the comma stands, and the next
+        /// turn of the loop reports the missing member.
+        private mutating func consumedTrailingComma(before close: Unicode.Scalar) -> Bool {
+            index += 1 // ','
+            guard options.contains(.trailingCommas) else { return false }
+            skipWhitespace()
+            guard current == close else { return false }
+            index += 1
+            return true
+        }
+
         private mutating func parseObject(depth: Int) throws -> JSONValue {
             index += 1 // '{'
             var members: [(key: String, value: JSONValue)] = []
@@ -175,7 +201,8 @@ public enum JSONParser {
                 members.append((key, try parseValue(depth: depth + 1)))
                 skipWhitespace()
                 switch current {
-                case ",": index += 1
+                case ",":
+                    if consumedTrailingComma(before: "}") { return .object(members) }
                 case "}": index += 1; return .object(members)
                 case nil: throw error("Unterminated object")
                 default: throw error("Expected ',' or '}' in object")
@@ -193,7 +220,8 @@ public enum JSONParser {
                 elements.append(try parseValue(depth: depth + 1))
                 skipWhitespace()
                 switch current {
-                case ",": index += 1
+                case ",":
+                    if consumedTrailingComma(before: "]") { return .array(elements) }
                 case "]": index += 1; return .array(elements)
                 case nil: throw error("Unterminated array")
                 default: throw error("Expected ',' or ']' in array")

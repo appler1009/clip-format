@@ -94,7 +94,10 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testInvalidJSONReportsParsePosition() {
-        let document = JSONCanvas.model(from: #"{"a": 1,}"#)
+        // Not a trailing comma any more: that is valid JSONC now, and this
+        // test is about the position in the message, not about which shapes
+        // are accepted.
+        let document = JSONCanvas.model(from: #"{"a": }"#)
         XCTAssertFalse(document.isValid)
         XCTAssertTrue(document.errorMessage?.contains("line 1") == true)
     }
@@ -138,13 +141,13 @@ final class JSONCanvasTests: XCTestCase {
         }
         """)
         XCTAssertTrue(document.isValid)
-        XCTAssertEqual(document.kind, .commented)
+        XCTAssertEqual(document.kind, .jsonc)
         XCTAssertEqual(document.minifiedText, #"{"port":3000,"host":"localhost"}"#)
     }
 
     func testParsesBlockComments() {
         let document = JSONCanvas.model(from: "/* header */ {\"a\": /* inline */ 1}")
-        XCTAssertEqual(document.kind, .commented)
+        XCTAssertEqual(document.kind, .jsonc)
         XCTAssertEqual(document.minifiedText, #"{"a":1}"#)
     }
 
@@ -182,24 +185,84 @@ final class JSONCanvasTests: XCTestCase {
         XCTAssertNotNil(document.errorMessage)
     }
 
-    func testCommentedDocumentReportsTheCommentStageError() {
-        // tsconfig-shaped: comments, and a trailing comma this parser does not
-        // accept. Strict JSON fails at the first `/`, which says nothing about
-        // the comma that is actually the problem.
+    func testTsconfigShapedFileWithCommentsAndTrailingComma() {
+        // The case this whole path exists for: both leniencies at once.
         let document = JSONCanvas.model(from: """
         {
           // options
           "target": "ES2022",
+          "strict": true,
+        }
+        """)
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .jsonc)
+        XCTAssertEqual(document.minifiedText, #"{"target":"ES2022","strict":true}"#)
+    }
+
+    func testTrailingCommasWithoutComments() {
+        let document = JSONCanvas.model(from: #"{"a":[1,2,],}"#)
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .jsonc)
+        XCTAssertEqual(document.minifiedText, #"{"a":[1,2]}"#)
+    }
+
+    func testStrictJSONStillRejectsTrailingCommas() {
+        // The strict reading is unchanged: this is the leniency being opt-in.
+        XCTAssertThrowsError(try JSONParser.parse(#"{"a":1,}"#))
+        XCTAssertThrowsError(try JSONParser.parse("[1,2,]"))
+        XCTAssertEqual(try? JSONParser.parse(#"{"a":1,}"#, options: .jsonc),
+                       .object([(key: "a", value: .number("1"))]))
+    }
+
+    func testCommentBetweenTheCommaAndTheBrace() {
+        // The shape VS Code writes: the comma is not the last thing before the
+        // brace, a comment is. Locks the skip between the two.
+        let object = JSONCanvas.model(from: """
+        {
+          "strict": true, // always
+        }
+        """)
+        XCTAssertTrue(object.isValid)
+        XCTAssertEqual(object.minifiedText, #"{"strict":true}"#)
+
+        let array = JSONCanvas.model(from: "[\n  1, /* and that is all */\n]")
+        XCTAssertTrue(array.isValid)
+        XCTAssertEqual(array.minifiedText, "[1]")
+    }
+
+    func testJSONLinesRecordsStayStrict() {
+        // Documented, not accidental: JSON Lines is one *valid JSON* value per
+        // line, so a trailing comma in a record is a bad record — and the error
+        // names the line rather than being softened into JSONC.
+        let document = JSONCanvas.model(from: "{\"a\":1,}\n{\"b\":2}")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorMessage?.contains("line 1"), true)
+    }
+
+    func testALoneCommaIsStillAnError() {
+        // Leniency is about a comma *after* a value, not commas anywhere.
+        XCTAssertFalse(JSONCanvas.model(from: "{,}").isValid)
+        XCTAssertFalse(JSONCanvas.model(from: "[,]").isValid)
+        XCTAssertFalse(JSONCanvas.model(from: #"{"a":1,,}"#).isValid)
+    }
+
+    func testJSONCErrorStillNamesTheRealProblem() {
+        // Comments plus something genuinely wrong: the error should not point
+        // at the comment that the strict parser tripped over first.
+        let document = JSONCanvas.model(from: """
+        {
+          // options
+          "target": ES2022
         }
         """)
         XCTAssertFalse(document.isValid)
         XCTAssertEqual(document.errorMessage?.contains("Unexpected character '/'"), false)
-        XCTAssertEqual(document.errorMessage?.contains("line 4"), true)
+        XCTAssertEqual(document.errorMessage?.contains("line 3"), true)
     }
 
     func testCommentedDocumentHasASingleValue() {
         let document = JSONCanvas.model(from: "// note\n{\"a\":1}")
-        XCTAssertEqual(document.kind, .commented)
+        XCTAssertEqual(document.kind, .jsonc)
         // One document, one value — the nil is reserved for JSON Lines.
         XCTAssertEqual(document.value, .object([(key: "a", value: .number("1"))]))
     }
@@ -208,7 +271,7 @@ final class JSONCanvasTests: XCTestCase {
         // Formatting is driven by the parsed value, so comments are dropped.
         // Documented behaviour, asserted so that it stays deliberate.
         let document = JSONCanvas.model(from: "{\n  // note\n  \"a\": 1\n}")
-        XCTAssertEqual(document.kind, .commented)
+        XCTAssertEqual(document.kind, .jsonc)
         XCTAssertEqual(document.prettyText?.contains("note"), false)
     }
 
@@ -264,8 +327,9 @@ final class JSONCanvasTests: XCTestCase {
 
     func testBrokenDocumentKeepsItsOwnError() {
         // Lines that do not each look like JSON: this was a document with a
-        // typo, so the document's error is the useful one.
-        let document = JSONCanvas.model(from: "{\n  \"a\": 1,\n}")
+        // typo, so the document's error is the useful one. A missing comma,
+        // since a spare one is now accepted as JSONC.
+        let document = JSONCanvas.model(from: "{\n  \"a\": 1\n  \"b\": 2\n}")
         XCTAssertFalse(document.isValid)
         XCTAssertEqual(document.errorMessage?.contains("line 3"), true)
     }
