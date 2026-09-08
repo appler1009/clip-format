@@ -25,8 +25,10 @@ struct PopoverView: View {
             Divider()
             footer
         }
-        .frame(width: 520)
-        .frame(minHeight: 180, maxHeight: 560)
+        // Sizing belongs to whoever is hosting the view: the popover pins it
+        // to contentSize, and the torn-off window lets the user resize.
+        .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity,
+               minHeight: 180, idealHeight: 420, maxHeight: .infinity)
         .background(theme.background.color)
     }
 

@@ -17,13 +17,15 @@ struct ClipFormatApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
-    private let popover = NSPopover()
+    private var popover = NSPopover()
     private let monitor = ClipboardMonitor()
     private let preferences = Preferences.shared
     private var cancellables: Set<AnyCancellable> = []
     private var eventMonitor: Any?
     private var keyMonitor: Any?
     private let preferencesWindow = PreferencesWindowController()
+    /// Non-nil once the user has dragged the popover off the status item.
+    private var detachedWindow: DetachedJSONWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
@@ -112,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Show Clipboard JSON", action: #selector(togglePopover), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Clipboard JSON", action: #selector(showJSONWindow), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "About ClipFormat", action: #selector(showAbout), keyEquivalent: "")
@@ -129,10 +131,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Popover
 
-    private func configurePopover() {
-        popover.behavior = .transient
-        popover.animates = true
-        let hosting = NSHostingController(
+    /// One view, two hosts. Both get their own controller but the same
+    /// `monitor`, so the popover and a torn-off window stay in step without
+    /// anything being copied between them.
+    private func makeContentController() -> NSHostingController<PopoverView> {
+        NSHostingController(
             rootView: PopoverView(
                 monitor: monitor,
                 preferences: preferences,
@@ -140,20 +143,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 quit: { [weak self] in self?.quit() }
             )
         )
-        // Without an explicit sizing policy the hosting controller reports a
-        // zero preferred size and the popover opens invisibly.
-        hosting.sizingOptions = [.preferredContentSize]
+    }
+
+    private func configurePopover() {
+        popover.behavior = .transient
+        popover.animates = true
+        popover.delegate = self
+        let hosting = makeContentController()
+        // The view carries no fixed frame any more, so that the torn-off
+        // window can resize it. That leaves the hosting controller reporting a
+        // zero preferred size, which opens the popover invisibly, so the
+        // popover's size is stated here instead.
+        hosting.sizingOptions = []
+        hosting.preferredContentSize = NSSize(width: 520, height: 420)
+        hosting.view.autoresizingMask = [.width, .height]
         popover.contentViewController = hosting
         popover.contentSize = NSSize(width: 520, height: 420)
     }
 
+    /// The popover and the torn-off window are the same view on the same
+    /// monitor, so bringing the window forward is the honest answer to a click
+    /// on the status item once one exists.
+    private func focusDetachedWindow(_ window: DetachedJSONWindow) {
+        monitor.refresh(force: true)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
     @objc private func togglePopover() {
+        if let detachedWindow {
+            focusDetachedWindow(detachedWindow)
+            return
+        }
         if popover.isShown {
             popover.performClose(nil)
             return
         }
         guard let button = statusItem.button else { return }
         monitor.refresh(force: true)
+        // Fresh content every time: after a tear-off the previous view belongs
+        // to the window, and a popover shown with a view that has moved
+        // elsewhere comes up blank.
+        configurePopover()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
         installDismissMonitor()
@@ -166,22 +197,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.popover.performClose(nil) }
         }
-        // A menu-bar popover rarely participates in the SwiftUI command system,
-        // so ⌘+ / ⌘− are handled here while it is open.
+        installKeyMonitor()
+    }
+
+    /// ⌘+ / ⌘− for both surfaces. An agent app has no menu bar to hang the
+    /// commands off, and the monitor has to outlive the popover because the
+    /// torn-off window needs them too.
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handlePopoverKey(event) ?? event
+            self?.handleFontSizeKey(event) ?? event
         }
     }
 
     private func removeDismissMonitor() {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         eventMonitor = nil
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        keyMonitor = nil
+        // The key monitor stays while a torn-off window is around.
+        guard detachedWindow == nil, let keyMonitor else { return }
+        NSEvent.removeMonitor(keyMonitor)
+        self.keyMonitor = nil
     }
 
-    private func handlePopoverKey(_ event: NSEvent) -> NSEvent? {
-        guard popover.isShown else { return event }
+    private func handleFontSizeKey(_ event: NSEvent) -> NSEvent? {
+        guard popover.isShown || detachedWindow?.isKeyWindow == true else { return event }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard flags.contains(.command),
               !flags.contains(.option),
@@ -200,6 +239,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu actions
 
+    @objc private func showJSONWindow() {
+        if let detachedWindow {
+            focusDetachedWindow(detachedWindow)
+        } else {
+            togglePopover()
+        }
+    }
+
     @objc private func openPreferences() {
         popover.performClose(nil)
         preferencesWindow.show(preferences: preferences)
@@ -216,5 +263,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+}
+
+// MARK: - Tear-off
+
+/// Dragging the popover off the status item turns it into a window.
+///
+/// AppKit owns the gesture: we agree to it and hand back a window. The window
+/// hosts its own copy of the view on the same `ClipboardMonitor`, so it keeps
+/// mirroring the clipboard rather than freezing what was on screen when it was
+/// torn off.
+extension AppDelegate: NSPopoverDelegate {
+    func popoverShouldDetach(_ popover: NSPopover) -> Bool { true }
+
+    func detachableWindow(for popover: NSPopover) -> NSWindow? {
+        if let detachedWindow { return detachedWindow }
+        let window = DetachedJSONWindow()
+        // AppKit hands the popover's view over, but a SwiftUI hosting view
+        // arrives without its sizing and renders blank, so the window gets its
+        // own controller on the same monitor instead.
+        window.contentViewController = makeContentController()
+        // The view states a minimum but no fixed size, so without this the
+        // window opens at 380x220 and clips the JSON.
+        window.setContentSize(NSSize(width: 520, height: 420))
+        window.delegate = self
+        detachedWindow = window
+
+        // `popoverDidDetach` is never called when the delegate vends a window,
+        // so the tidying up happens here — after this run loop turn, since
+        // AppKit is still in the middle of the detach.
+        //
+        // The popover object itself has to be replaced. Once it has been
+        // detached it opens blank forever after, even with fresh content, so
+        // the next click gets a new one.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.popover = NSPopover()
+            self.configurePopover()
+            // The global click monitor exists to close a transient popover; a
+            // window is not transient, and leaving it installed would swallow
+            // the first click in every other app.
+            self.removeDismissMonitor()
+            self.installKeyMonitor()
+        }
+        return window
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === detachedWindow else { return }
+        detachedWindow = nil
+        // Nothing is watching for ⌘+ / ⌘− any more until a surface reopens.
+        if let keyMonitor, !popover.isShown {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
+        Diagnostics.info("detached window closed")
     }
 }
