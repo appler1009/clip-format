@@ -4,6 +4,19 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## Unreleased
+
+- JSON with comments. `.jsonc` files, and any `.json` that tooling has
+  commented — `tsconfig.json`, VS Code settings — are read instead of refused.
+  Both `//` to end of line and `/* … */` count, anywhere whitespace is allowed.
+- The torn-off window can go full screen; the green button offered only zoom
+  before. Its remembered frame is unaffected by the transition.
+
+Strict JSON is still tried first and is never re-read loosely, so a document
+that parses as RFC 8259 JSON is reported as JSON. Comments are read but not
+kept: formatting comes from the parsed value, so the comments are not in the
+formatted output.
+
 ## 0.3.0
 
 - JSON Lines. A file or clipboard holding one JSON value per line — the format

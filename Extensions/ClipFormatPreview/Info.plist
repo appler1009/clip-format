@@ -7,6 +7,23 @@
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.appler1009.jsonc</string>
+			<key>UTTypeDescription</key>
+			<string>JSON with Comments</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>jsonc</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
 			<!-- macOS declares public.ndjson for .ndjson but nothing for
 			     .jsonl, and public.* is Apple's to hand out, so this app mints
 			     the missing half. Exported, not imported: imported is for types
@@ -41,6 +58,7 @@
 				<string>public.json</string>
 				<string>public.ndjson</string>
 				<string>com.appler1009.jsonl</string>
+				<string>com.appler1009.jsonc</string>
 			</array>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

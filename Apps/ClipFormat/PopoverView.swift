@@ -57,7 +57,11 @@ struct PopoverView: View {
 
     private var statusTitle: String {
         guard document.isValid else { return "Clipboard isn’t JSON" }
-        return document.kind == .lineDelimited ? "Clipboard is JSON Lines" : "Clipboard is JSON"
+        switch document.kind {
+        case .json: return "Clipboard is JSON"
+        case .lineDelimited: return "Clipboard is JSON Lines"
+        case .commented: return "Clipboard is JSON with comments"
+        }
     }
 
     private var statusDetail: String? {
