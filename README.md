@@ -74,6 +74,7 @@ If it still doesn't attach: keep the app in `/Applications`, open it once, and c
 - The menu-bar badge deliberately ignores bare literals — copying `42` or `"hello"` is technically valid JSON but flagging it would make the badge meaningless. Objects and arrays count.
 - Formatted output is capped at 500,000 characters on screen; past that the view is truncated with a notice. **Copy Pretty** still gives you the whole thing.
 - Sources over 32 MB aren't parsed. Quick Look reads a file whole or not at all: past that limit it says so by size, because a leading slice of a JSON document cannot parse and reporting it as malformed would be a lie. A 32 MB document can still take long enough to bump against Quick Look's time budget.
+- Trailing commas are not accepted, even in a commented document. `tsconfig.json` often has both; the error names the comma rather than the first comment.
 - Comments are read, not kept. Formatting is driven by the parsed value, so **Copy Pretty** and the rendered view show the JSON without the comments that were in the source.
 - Strict JSON is tried first and never re-read loosely: a document that parses as RFC 8259 JSON is reported as JSON, and comments are only considered once that has failed.
 - JSON Lines is all or nothing: every non-empty line has to parse, and each has to be an object or an array. One bad line and the whole thing is reported as a broken JSON document instead, which keeps the parse error visible rather than burying it.

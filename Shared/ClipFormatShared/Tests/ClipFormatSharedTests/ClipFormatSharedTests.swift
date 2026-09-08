@@ -167,10 +167,41 @@ final class JSONCanvasTests: XCTestCase {
         XCTAssertFalse(JSONCanvas.model(from: "// note\n42").isValid)
     }
 
-    func testUnterminatedBlockCommentIsAnError() {
+    func testUnterminatedBlockCommentAfterACompleteValueIsAnError() {
+        // The value is complete, so nothing else fails: only the unclosed
+        // comment makes this invalid. Consuming it as trivia would call this
+        // document valid.
+        let document = JSONCanvas.model(from: "{\"a\":1}/* never closed")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorMessage?.contains("Unterminated block comment"), true)
+    }
+
+    func testUnterminatedBlockCommentInsideAValueIsAnError() {
         let document = JSONCanvas.model(from: "{\"a\": 1 /* never closed")
         XCTAssertFalse(document.isValid)
         XCTAssertNotNil(document.errorMessage)
+    }
+
+    func testCommentedDocumentReportsTheCommentStageError() {
+        // tsconfig-shaped: comments, and a trailing comma this parser does not
+        // accept. Strict JSON fails at the first `/`, which says nothing about
+        // the comma that is actually the problem.
+        let document = JSONCanvas.model(from: """
+        {
+          // options
+          "target": "ES2022",
+        }
+        """)
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorMessage?.contains("Unexpected character '/'"), false)
+        XCTAssertEqual(document.errorMessage?.contains("line 4"), true)
+    }
+
+    func testCommentedDocumentHasASingleValue() {
+        let document = JSONCanvas.model(from: "// note\n{\"a\":1}")
+        XCTAssertEqual(document.kind, .commented)
+        // One document, one value — the nil is reserved for JSON Lines.
+        XCTAssertEqual(document.value, .object([(key: "a", value: .number("1"))]))
     }
 
     func testCommentsDoNotSurviveFormatting() {

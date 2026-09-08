@@ -66,6 +66,9 @@ public enum JSONParser {
         scanner.skipWhitespace()
         let value = try scanner.parseValue(depth: 0)
         scanner.skipWhitespace()
+        guard !scanner.unterminatedBlockComment else {
+            throw scanner.error("Unterminated block comment")
+        }
         guard scanner.isAtEnd else {
             throw scanner.error("Unexpected trailing content")
         }
@@ -78,6 +81,8 @@ public enum JSONParser {
         private let scalars: [Unicode.Scalar]
         private let options: Options
         private var index: Int = 0
+        /// Set by `skipWhitespace`; `parse` turns it into an error.
+        private(set) var unterminatedBlockComment = false
 
         init(_ scalars: [Unicode.Scalar], options: Options = []) {
             self.scalars = scalars
@@ -108,13 +113,24 @@ public enum JSONParser {
                     while let c = current, c != "\n", c != "\r" { index += 1 }
                 case "*":
                     index += 2
-                    while index + 1 < scalars.count, !(scalars[index] == "*" && scalars[index + 1] == "/") {
+                    var closed = false
+                    while index + 1 < scalars.count {
+                        if scalars[index] == "*" && scalars[index + 1] == "/" {
+                            index += 2
+                            closed = true
+                            break
+                        }
                         index += 1
                     }
-                    // An unterminated block comment runs to the end and the
-                    // parser reports the resulting end of input; throwing from
-                    // here would mean `try` at every call site.
-                    index = min(index + 2, scalars.count)
+                    if !closed {
+                        // Recorded rather than thrown: skipWhitespace cannot
+                        // throw without `try` at every structural position.
+                        // `parse` checks this at the end, so an unclosed
+                        // comment after a complete value is still an error
+                        // instead of being swallowed as trivia.
+                        index = scalars.count
+                        unterminatedBlockComment = true
+                    }
                 default:
                     return // a lone '/' is the parser's problem, not ours
                 }

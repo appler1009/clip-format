@@ -35,9 +35,10 @@ public struct PrettyJSONDocument: Sendable {
 
     public var isValid: Bool { !records.isEmpty }
 
-    /// The single value, when the source held one JSON document. Nil for JSON
-    /// Lines, which has no one value — use `records`.
-    public var value: JSONValue? { kind == .json ? records.first : nil }
+    /// The single value, when the source held one document — with or without
+    /// comments. Nil only for JSON Lines, which genuinely has no one value;
+    /// use `records` there.
+    public var value: JSONValue? { kind == .lineDelimited ? nil : records.first }
 
     /// How many lines parsed, for the "17 records" the hosts show.
     public var recordCount: Int { records.count }
