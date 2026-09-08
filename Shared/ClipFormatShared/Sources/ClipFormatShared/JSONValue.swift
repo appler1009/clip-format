@@ -15,6 +15,15 @@ public indirect enum JSONValue: Equatable, Sendable {
     case array([JSONValue])
     case object([(key: String, value: JSONValue)])
 
+    /// An object or an array — what the hosts count as "some JSON", as
+    /// opposed to a bare literal that happens to be valid.
+    public var isContainer: Bool {
+        switch self {
+        case .object, .array: return true
+        default: return false
+        }
+    }
+
     public static func == (lhs: JSONValue, rhs: JSONValue) -> Bool {
         switch (lhs, rhs) {
         case (.null, .null): return true
@@ -41,8 +50,19 @@ public struct JSONParseError: Error, Equatable, Sendable {
 
 /// A small hand-rolled recursive-descent parser for RFC 8259 JSON.
 public enum JSONParser {
-    public static func parse(_ text: String) throws -> JSONValue {
-        var scanner = Scanner(Array(text.unicodeScalars))
+    public struct Options: OptionSet, Sendable {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+
+        /// Accept `//` to end of line and `/* … */`, as JSONC and the JSON
+        /// files tooling writes (`tsconfig.json`, VS Code settings) use. Off by
+        /// default: RFC 8259 has no comments, and accepting them everywhere
+        /// would make the strict reading a lie.
+        public static let comments = Options(rawValue: 1 << 0)
+    }
+
+    public static func parse(_ text: String, options: Options = []) throws -> JSONValue {
+        var scanner = Scanner(Array(text.unicodeScalars), options: options)
         scanner.skipWhitespace()
         let value = try scanner.parseValue(depth: 0)
         scanner.skipWhitespace()
@@ -56,9 +76,13 @@ public enum JSONParser {
 
     struct Scanner {
         private let scalars: [Unicode.Scalar]
+        private let options: Options
         private var index: Int = 0
 
-        init(_ scalars: [Unicode.Scalar]) { self.scalars = scalars }
+        init(_ scalars: [Unicode.Scalar], options: Options = []) {
+            self.scalars = scalars
+            self.options = options
+        }
 
         var isAtEnd: Bool { index >= scalars.count }
         private var current: Unicode.Scalar? { isAtEnd ? nil : scalars[index] }
@@ -71,8 +95,30 @@ public enum JSONParser {
             return JSONParseError(offset: index, line: line, column: column, reason: reason)
         }
 
+        /// Whitespace, and comments when they are allowed. Every structural
+        /// position in the grammar already calls this, which is what makes one
+        /// change here enough to accept comments between any two tokens.
         mutating func skipWhitespace() {
-            while let c = current, c == " " || c == "\t" || c == "\n" || c == "\r" { index += 1 }
+            while true {
+                while let c = current, c == " " || c == "\t" || c == "\n" || c == "\r" { index += 1 }
+                guard options.contains(.comments), current == "/", index + 1 < scalars.count else { return }
+                switch scalars[index + 1] {
+                case "/":
+                    index += 2
+                    while let c = current, c != "\n", c != "\r" { index += 1 }
+                case "*":
+                    index += 2
+                    while index + 1 < scalars.count, !(scalars[index] == "*" && scalars[index + 1] == "/") {
+                        index += 1
+                    }
+                    // An unterminated block comment runs to the end and the
+                    // parser reports the resulting end of input; throwing from
+                    // here would mean `try` at every call site.
+                    index = min(index + 2, scalars.count)
+                default:
+                    return // a lone '/' is the parser's problem, not ours
+                }
+            }
         }
 
         mutating func parseValue(depth: Int) throws -> JSONValue {

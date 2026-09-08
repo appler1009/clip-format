@@ -27,50 +27,49 @@ public enum JSONCanvas {
                                       errorMessage: "Over the \(sourceByteLimit / 1_048_576) MB limit",
                                       isTruncated: true)
         }
-        guard looksLikeJSON(trimmed) else {
-            // The shape check reads the first and last character of the whole
-            // buffer, which a JSON Lines file only satisfies when its first and
-            // last records are the same kind of value: `{...}` then `[...]`
-            // would fail it. Ask the line reader before giving up.
-            switch lineDelimited(trimmed) {
-            case .records(let records):
-                return PrettyJSONDocument(source: trimmed, indent: indent,
-                                          records: records, kind: .lineDelimited,
-                                          errorMessage: nil)
-            case .lineError(let error, let line):
+
+        // One strict JSON document is the common case, and it is tried first so
+        // that nothing else can loosen what "valid JSON" means.
+        var documentError: JSONParseError?
+        if looksLikeJSON(trimmed) {
+            do {
+                let value = try JSONParser.parse(trimmed)
+                return PrettyJSONDocument(source: trimmed, indent: indent, value: value, errorMessage: nil)
+            } catch let error as JSONParseError {
+                documentError = error
+            } catch {
                 return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
-                                          errorMessage: Self.message(for: error, onLine: line))
-            case .notLineDelimited:
-                return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
-                                          errorMessage: "Not JSON")
+                                          errorMessage: error.localizedDescription)
             }
         }
 
-        do {
-            let value = try JSONParser.parse(trimmed)
-            return PrettyJSONDocument(source: trimmed, indent: indent, value: value, errorMessage: nil)
-        } catch let error as JSONParseError {
-            // A JSON Lines file reads as a document that fails on trailing
-            // content, so try it as lines before reporting that.
-            switch lineDelimited(trimmed) {
-            case .records(let records):
-                return PrettyJSONDocument(source: trimmed, indent: indent,
-                                          records: records, kind: .lineDelimited,
-                                          errorMessage: nil)
-            case .lineError(let lineError, let line):
-                // Every line looked like JSON and one of them did not parse:
-                // this was meant to be JSON Lines, so the offending line is
-                // more use than the document's "trailing content" at line 2.
-                return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
-                                          errorMessage: Self.message(for: lineError, onLine: line))
-            case .notLineDelimited:
-                return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
-                                          errorMessage: error.message)
-            }
-        } catch {
+        // JSON Lines, which reads as a document that fails on trailing content.
+        switch lineDelimited(trimmed) {
+        case .records(let records):
+            return PrettyJSONDocument(source: trimmed, indent: indent,
+                                      records: records, kind: .lineDelimited, errorMessage: nil)
+        case .lineError(let lineError, let line):
+            // Every line looked like JSON and one did not parse: this was meant
+            // to be JSON Lines, so the offending line beats the document's
+            // "trailing content" at line 2.
             return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
-                                      errorMessage: error.localizedDescription)
+                                      errorMessage: Self.message(for: lineError, onLine: line))
+        case .notLineDelimited:
+            break
         }
+
+        // JSON with comments. Anything succeeding here needed the comment rules,
+        // since strict parsing has already been tried. Objects and arrays only,
+        // the same rule `looksLikeJSON` applies to the other kinds: `// note`
+        // followed by `42` is no more a JSONC document than a bare `42` is a
+        // JSON one.
+        if let value = try? JSONParser.parse(trimmed, options: .comments), value.isContainer {
+            return PrettyJSONDocument(source: trimmed, indent: indent,
+                                      records: [value], kind: .commented, errorMessage: nil)
+        }
+
+        return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
+                                  errorMessage: documentError?.message ?? "Not JSON")
     }
 
     /// What reading the source as JSON Lines turned up.
