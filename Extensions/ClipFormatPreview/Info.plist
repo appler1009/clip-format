@@ -4,6 +4,32 @@
 <dict>
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<!-- macOS declares public.ndjson for .ndjson but nothing for
+			     .jsonl, and public.* is Apple's to hand out, so this app mints
+			     the missing half. Exported, not imported: imported is for types
+			     someone else owns, and nothing else declares this one. Repeated
+			     in the extension's plist so the type resolves there without the
+			     host app having been launched. -->
+			<key>UTTypeIdentifier</key>
+			<string>com.appler1009.jsonl</string>
+			<key>UTTypeDescription</key>
+			<string>JSON Lines</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>jsonl</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>

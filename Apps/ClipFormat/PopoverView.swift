@@ -67,7 +67,7 @@ struct PopoverView: View {
         // The record count is the thing worth knowing about a JSON Lines file;
         // the byte count says little about how much is in it.
         let summary = document.kind == .lineDelimited
-            ? "\(document.recordCount) records · \(bytes)"
+            ? "\(document.recordCount) \(document.recordCount == 1 ? "record" : "records") · \(bytes)"
             : bytes
         return document.isTruncated ? "\(summary) · truncated" : summary
     }

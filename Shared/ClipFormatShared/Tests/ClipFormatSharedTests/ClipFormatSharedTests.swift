@@ -159,12 +159,30 @@ final class JSONCanvasTests: XCTestCase {
         XCTAssertNotNil(document.value)
     }
 
-    func testOneBadLineFailsTheWholeThing() {
-        // Reporting a broken document as "not JSON Lines either" would bury the
-        // parse error, so a single bad line keeps the document error.
+    func testOneBadLineReportsThatLineNotTheDocument() {
         let document = JSONCanvas.model(from: "{\"a\":1}\n{\"a\":}\n{\"a\":3}")
         XCTAssertFalse(document.isValid)
-        XCTAssertNotNil(document.errorMessage)
+        // The document parse fails at line 2 with "trailing content", which
+        // says nothing about the record that is actually wrong.
+        XCTAssertEqual(document.errorMessage?.contains("trailing"), false)
+        XCTAssertEqual(document.errorMessage?.contains("line 2"), true)
+    }
+
+    func testMixedRecordKindsAreStillJSONLines() {
+        // First char `{`, last char `]`: the whole-buffer shape check fails, so
+        // this only works if the line reader is consulted anyway.
+        let document = JSONCanvas.model(from: "{\"a\":1}\n[1,2,3]")
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .lineDelimited)
+        XCTAssertEqual(document.recordCount, 2)
+    }
+
+    func testBrokenDocumentKeepsItsOwnError() {
+        // Lines that do not each look like JSON: this was a document with a
+        // typo, so the document's error is the useful one.
+        let document = JSONCanvas.model(from: "{\n  \"a\": 1,\n}")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorMessage?.contains("line 3"), true)
     }
 
     func testBareLiteralLinesAreNotJSONLines() {
