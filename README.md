@@ -10,6 +10,7 @@ Still free, still no paywall.
 
 - **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds valid JSON, a red ✕ when it doesn't.
 - **Click for the formatted view** — syntax-coloured, selectable, scrollable, with **Copy Pretty** and **Copy Minified**.
+- **Tear it off** — drag the popover away from the menu bar and it becomes a window that keeps following the clipboard. Resizable, remembers its frame, Escape to close.
 - **Quick Look for `.json` files** — Spacebar in Finder renders through the same code the popover uses.
 - **Tells you what's wrong** — invalid JSON gets the parse error with a line and column, plus an excerpt of what was actually on the clipboard.
 - **Stays out of the way** — no Dock icon (`LSUIElement`), no clipboard rewriting, no history stored anywhere.

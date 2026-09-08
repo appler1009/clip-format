@@ -4,6 +4,16 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.2.0
+
+- The popover tears off into a window. Drag it away from the status item and it
+  becomes a standalone "Clipboard JSON" window — AppKit's own gesture, no button
+  to learn. The window keeps mirroring the clipboard rather than freezing what
+  was on screen when it was torn off, so it can sit beside your work and follow
+  along. It is resizable, remembers where and how big you left it, and Escape
+  closes it. While one is open, clicking the status item brings it forward
+  instead of opening a second copy.
+
 ## 0.1.2
 
 - App icon: the menu-bar braces holding three syntax-coloured lines, drawn in
