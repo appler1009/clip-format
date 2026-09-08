@@ -11,7 +11,7 @@ settings:
     SWIFT_VERSION: "5.9"
     # Single source of truth for the release version. The release
     # workflow refuses to build if the pushed tag disagrees with it.
-    MARKETING_VERSION: "0.1.1"
+    MARKETING_VERSION: "0.1.2"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: TN2RQ5P647
@@ -41,6 +41,7 @@ targets:
         INFOPLIST_FILE: Apps/ClipFormat/Info.plist
         GENERATE_INFOPLIST_FILE: YES
         COMBINE_HIDPI_IMAGES: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         # Debug adds only one thing: outbound network, for LogDock diagnostics.
         Debug:

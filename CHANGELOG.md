@@ -4,6 +4,13 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.1.2
+
+- App icon: the menu-bar braces holding three syntax-coloured lines, drawn in
+  the same palette as the popover and the Quick Look preview. Small sizes get
+  their own treatment — two heavier lines at 32px, braces alone at 16px, since
+  three thin lines smear at that scale.
+
 ## 0.1.1
 
 First published build. 0.1.0 was tagged but never released — its release
