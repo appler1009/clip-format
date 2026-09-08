@@ -84,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         monitor.stop()
         removeDismissMonitor()
+        // windowDidMove has no "ended" sibling, so a window that was dragged
+        // and never resized is recorded here.
+        detachedWindow?.persistFrameUnlessFullScreen()
     }
 
     // MARK: - Status item
@@ -324,11 +327,26 @@ extension AppDelegate: NSPopoverDelegate {
 }
 
 extension AppDelegate: NSWindowDelegate {
+    // Commit points only. windowDidResize is the live-resize stream — one
+    // UserDefaults write per pixel — and its frames during the full-screen
+    // animation are on their way to the size of the display.
+    func windowDidEndLiveResize(_ notification: Notification) {
+        (notification.object as? DetachedJSONWindow)?.persistFrameUnlessFullScreen()
+    }
+
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        (notification.object as? DetachedJSONWindow)?.willEnterFullScreen()
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        (notification.object as? DetachedJSONWindow)?.didExitFullScreen()
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? DetachedJSONWindow, window === detachedWindow else { return }
-        // Saved here rather than by autosave, so that the size the user chose
-        // survives while the tear-off gesture still owns first placement.
-        window.saveFrame(usingName: DetachedJSONWindow.frameName)
+        // Saved by hand rather than by autosave, so the tear-off gesture still
+        // owns first placement; see DetachedJSONWindow.frameName.
+        window.persistFrameUnlessFullScreen()
         detachedWindow = nil
         // Nothing is watching for ⌘+ / ⌘− any more until a surface reopens.
         if let keyMonitor, !popover.isShown {
