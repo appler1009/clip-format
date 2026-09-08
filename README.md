@@ -2,7 +2,7 @@
 
 A free macOS menu-bar app that shows you the JSON on your clipboard, formatted — and brings the same formatting to Finder's Quick Look.
 
-Copy some JSON, and the menu-bar icon turns green. Click it, and there's your payload, indented and syntax-coloured. Press Space on a `.json`, `.jsonc`, `.jsonl` or `.ndjson` file in Finder, and you get the same view.
+Copy some JSON or XML, and the menu-bar icon turns green. Click it, and there's your payload, indented and syntax-coloured. Press Space on a `.json`, `.jsonc`, `.jsonl`, `.ndjson` or `.xml` file in Finder, and you get the same view.
 
 Still free, still no paywall.
 
@@ -11,9 +11,10 @@ Still free, still no paywall.
 - **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds valid JSON, a red ✕ when it doesn't.
 - **Click for the formatted view** — syntax-coloured, selectable, scrollable, with **Copy Pretty** and **Copy Minified**.
 - **Tear it off** — drag the popover away from the menu bar and it becomes a window that keeps following the clipboard. Resizable, remembers its frame, Escape to close.
-- **Quick Look for `.json`, `.jsonc`, `.jsonl` and `.ndjson` files** — Spacebar in Finder renders through the same code the popover uses.
+- **Quick Look for `.json`, `.jsonc`, `.jsonl`, `.ndjson` and `.xml` files** — Spacebar in Finder renders through the same code the popover uses.
 - **JSON Lines** — a file or clipboard holding one JSON value per line is recognised as such, each record expanded in turn with a count in the header. **Copy Minified** gives the file's own shape back, one record per line.
 - **JSONC** — `.jsonc`, and any `.json` that tooling has written loosely (`tsconfig.json`, VS Code settings), read rather than refused: `//` and `/* … */` comments, and a comma before the closing brace or bracket.
+- **XML too** — elements indented, attributes kept in source order, comments and the declaration preserved, namespaces intact.
 - **Tells you what's wrong** — invalid JSON gets the parse error with a line and column, plus an excerpt of what was actually on the clipboard.
 - **Stays out of the way** — no Dock icon (`LSUIElement`), no clipboard rewriting, no history stored anywhere.
 
@@ -74,6 +75,8 @@ If it still doesn't attach: keep the app in `/Applications`, open it once, and c
 - The menu-bar badge deliberately ignores bare literals — copying `42` or `"hello"` is technically valid JSON but flagging it would make the badge meaningless. Objects and arrays count.
 - Formatted output is capped at 500,000 characters on screen; past that the view is truncated with a notice. **Copy Pretty** still gives you the whole thing.
 - Sources over 32 MB aren't parsed. Quick Look reads a file whole or not at all: past that limit it says so by size, because a leading slice of a JSON document cannot parse and reporting it as malformed would be a lie. A 32 MB document can still take long enough to bump against Quick Look's time budget.
+- XML attributes keep their source order, but namespace declarations are printed first regardless of where they appeared — `XMLDocument` reports them separately from the other attributes and their original position is not recoverable.
+- CDATA is shown as text. It parses and renders correctly, but the `<![CDATA[…]]>` wrapper is not reproduced.
 - Comments are read, not kept. Formatting is driven by the parsed value, so **Copy Pretty** and the rendered view show the JSON without the comments that were in the source.
 - Strict JSON is tried first and never re-read loosely: a document that parses as RFC 8259 JSON is reported as JSON, and the looser rules are only considered once that has failed. The consequence is that a trailing comma no longer produces a parse error in a JSON document — such a document is valid JSONC, and the menu-bar badge goes green for it. JSON Lines records stay strict, since that format is defined as one valid JSON value per line.
 - JSON Lines is all or nothing: every non-empty line has to parse, and each has to be an object or an array. One bad line and the whole thing is reported as a broken JSON document instead, which keeps the parse error visible rather than burying it.
@@ -81,4 +84,4 @@ If it still doesn't attach: keep the app in `/Applications`, open it once, and c
 
 ## Roadmap
 
-Thumbnail extension, XML, YAML, GeoJSON, collapsible tree view and key-path copy, secret masking for `password` / `token` keys, and the 2016 app's other formats — stack traces, Base64 and URL decoding.
+Thumbnail extension, YAML, GeoJSON, collapsible tree view and key-path copy, secret masking for `password` / `token` keys, and the 2016 app's other formats — stack traces, Base64 and URL decoding.

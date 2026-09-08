@@ -130,6 +130,91 @@ final class FormatCanvasTests: XCTestCase {
         XCTAssertEqual(FormatCanvas.model(from: data).minifiedText, #"{"emoji":"😀"}"#)
     }
 
+    // MARK: - XML
+
+    func testFormatsXMLWithAttributesInSourceOrder() {
+        let document = FormatCanvas.model(from: "<root zeta=\"1\" alpha=\"2\"><child id=\"x\">hi</child></root>")
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .xml)
+        // zeta before alpha: XMLDocument keeps source order where the SAX
+        // parser's attribute dictionary would not.
+        XCTAssertEqual(document.prettyText, """
+        <root zeta="1" alpha="2">
+          <child id="x">hi</child>
+        </root>
+        """)
+    }
+
+    func testTextOnlyElementStaysOnOneLine() {
+        let document = FormatCanvas.model(from: "<a><title>Hi</title></a>")
+        XCTAssertEqual(document.prettyText, "<a>\n  <title>Hi</title>\n</a>")
+    }
+
+    func testEmptyElementCollapses() {
+        XCTAssertEqual(FormatCanvas.model(from: "<a><b></b></a>").prettyText, "<a>\n  <b/>\n</a>")
+    }
+
+    func testKeepsCommentsAndProcessingInstructions() {
+        let document = FormatCanvas.model(from: "<?xml version=\"1.0\"?>\n<!-- note -->\n<a/>")
+        XCTAssertEqual(document.kind, .xml)
+        let rendered = document.prettyText ?? ""
+        XCTAssertTrue(rendered.contains("<?xml version=\"1.0\"?>"))
+        XCTAssertTrue(rendered.contains("<!-- note -->"))
+    }
+
+    func testXMLMinifiesWithoutInterElementWhitespace() {
+        let document = FormatCanvas.model(from: """
+        <root>
+          <a>1</a>
+          <b/>
+        </root>
+        """)
+        XCTAssertEqual(document.minifiedText, "<root><a>1</a><b/></root>")
+    }
+
+    func testEscapesSurviveARoundTrip() {
+        let document = FormatCanvas.model(from: "<a>fish &amp; chips &lt;yes&gt;</a>")
+        XCTAssertEqual(document.prettyText, "<a>fish &amp; chips &lt;yes&gt;</a>")
+    }
+
+    func testNamespaceDeclarationsSurvive() {
+        // XMLDocument keeps these out of `attributes`, so reading only that
+        // silently drops xmlns and changes what the document means.
+        let document = FormatCanvas.model(from: "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:dc=\"http://purl.org/dc\"><a/></feed>")
+        let rendered = document.prettyText ?? ""
+        XCTAssertTrue(rendered.contains("xmlns=\"http://www.w3.org/2005/Atom\""))
+        XCTAssertTrue(rendered.contains("xmlns:dc=\"http://purl.org/dc\""))
+    }
+
+    func testXMLWithANamespaceURLIsStillXML() {
+        // Regression: the `//` in a namespace URL made the JSONC stage claim
+        // this source and report "Unexpected character '<'", so the XML branch
+        // below it was unreachable for nearly every real document.
+        let document = FormatCanvas.model(from: "<feed xmlns=\"http://www.w3.org/2005/Atom\"><a/></feed>")
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .xml)
+    }
+
+    func testMalformedXMLReportsAnXMLError() {
+        let document = FormatCanvas.model(from: "<a><b></a>")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorTitle, "Not XML")
+        XCTAssertNotNil(document.errorMessage)
+    }
+
+    func testTextThatIsNeitherJSONNorXMLIsStillNotJSON() {
+        let document = FormatCanvas.model(from: "hello world")
+        XCTAssertEqual(document.errorTitle, "Not JSON")
+        XCTAssertEqual(document.errorMessage, "Not JSON")
+    }
+
+    func testXMLTokensCarryTagAndAttributeKinds() {
+        let document = FormatCanvas.model(from: "<a href=\"x\">t</a>")
+        XCTAssertTrue(document.tokens.contains { $0.kind == .tagName && $0.text == "a" })
+        XCTAssertTrue(document.tokens.contains { $0.kind == .attributeName && $0.text == "href" })
+        XCTAssertTrue(document.tokens.contains { $0.kind == .text && $0.text == "t" })
+    }
+
     // MARK: - JSON with comments
 
     func testParsesLineComments() {

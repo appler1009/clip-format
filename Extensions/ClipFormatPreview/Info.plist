@@ -59,6 +59,7 @@
 				<string>public.ndjson</string>
 				<string>com.appler1009.jsonl</string>
 				<string>com.appler1009.jsonc</string>
+				<string>public.xml</string>
 			</array>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

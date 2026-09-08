@@ -56,11 +56,14 @@ struct PopoverView: View {
     }
 
     private var statusTitle: String {
-        guard document.isValid else { return "Clipboard isn’t JSON" }
+        guard document.isValid else {
+            return document.errorTitle == "Not XML" ? "Clipboard isn’t valid XML" : "Clipboard isn’t JSON"
+        }
         switch document.kind {
         case .json: return "Clipboard is JSON"
         case .lineDelimited: return "Clipboard is JSON Lines"
         case .jsonc: return "Clipboard is JSONC"
+        case .xml: return "Clipboard is XML"
         }
     }
 

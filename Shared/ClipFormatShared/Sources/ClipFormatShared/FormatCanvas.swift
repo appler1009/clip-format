@@ -28,6 +28,24 @@ public enum FormatCanvas {
                                       isTruncated: true)
         }
 
+        // An opening angle bracket means XML, and nothing that follows can be
+        // JSON, so it is decided here rather than after the JSON readings have
+        // failed. Deciding it later put the XML branch out of reach: almost
+        // every XML document contains a namespace URL, and the `//` in it made
+        // the JSONC stage claim the source and report "unexpected '<'".
+        if trimmed.hasPrefix("<") {
+            do {
+                return FormattedDocument(source: trimmed, indent: indent,
+                                         xmlNodes: try XMLReader.parse(trimmed))
+            } catch let error as XMLParseError {
+                return FormattedDocument(source: trimmed, indent: indent, value: nil,
+                                         errorTitle: "Not XML", errorMessage: error.message)
+            } catch {
+                return FormattedDocument(source: trimmed, indent: indent, value: nil,
+                                         errorTitle: "Not XML", errorMessage: error.localizedDescription)
+            }
+        }
+
         // One strict JSON document is the common case, and it is tried first so
         // that nothing else can loosen what "valid JSON" means.
         var documentError: JSONParseError?
@@ -277,6 +295,8 @@ public enum FormatCanvas {
         .n { color: var(--number); }
         .l { color: var(--literal); }
         .p { color: var(--punctuation); }
+        .c { color: var(--fg2); font-style: italic; }
+        .t { color: var(--fg); }
         .notice {
           display: flex; align-items: center; gap: 8px;
           font: 12px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -315,11 +335,13 @@ public enum FormatCanvas {
 
     static func cssClass(for kind: SyntaxToken.Kind) -> String {
         switch kind {
-        case .key: return "k"
+        case .key, .tagName: return "k"
         case .string: return "s"
         case .number: return "n"
-        case .bool, .null: return "l"
+        case .bool, .null, .attributeName: return "l"
         case .punctuation: return "p"
+        case .comment: return "c"
+        case .text: return "t"
         case .whitespace: return ""
         }
     }

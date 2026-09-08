@@ -12,6 +12,13 @@ public struct SyntaxToken: Equatable, Sendable {
         case bool
         case null
         case whitespace
+        // XML. Element and attribute names sit where object keys do, but text
+        // content and comments have no JSON equivalent and need their own
+        // colours.
+        case tagName
+        case attributeName
+        case text
+        case comment
     }
 
     public let kind: Kind
