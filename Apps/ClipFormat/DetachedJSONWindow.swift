@@ -27,14 +27,30 @@ final class DetachedJSONWindow: NSWindow {
         title = "Clipboard JSON"
         isReleasedWhenClosed = false
         minSize = NSSize(width: 380, height: 220)
-        collectionBehavior = [.fullScreenNone, .participatesInCycle]
+        // A JSON payload is worth reading at full width, so the green button
+        // offers full screen rather than only zoom.
+        collectionBehavior = [.fullScreenPrimary, .participatesInCycle]
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
-    /// Escape closes it, matching the popover it was torn from.
+    /// Escape closes it, matching the popover it was torn from — except in
+    /// full screen, where Escape is how you leave full screen and closing the
+    /// window out from under that is jarring.
     override func cancelOperation(_ sender: Any?) {
+        guard !styleMask.contains(.fullScreen) else {
+            toggleFullScreen(nil)
+            return
+        }
         close()
+    }
+
+    /// Remembers the frame, unless the window is in full screen — where
+    /// `frame` is the whole display, and restoring that next time would open a
+    /// torn-off window the size of the screen.
+    func persistFrameUnlessFullScreen() {
+        guard !styleMask.contains(.fullScreen) else { return }
+        saveFrame(usingName: Self.frameName)
     }
 }

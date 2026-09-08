@@ -324,11 +324,22 @@ extension AppDelegate: NSPopoverDelegate {
 }
 
 extension AppDelegate: NSWindowDelegate {
+    // Recorded as it happens rather than on close, so that leaving the window
+    // in full screen — or quitting with it open — still restores the size the
+    // user last chose.
+    func windowDidResize(_ notification: Notification) {
+        (notification.object as? DetachedJSONWindow)?.persistFrameUnlessFullScreen()
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        (notification.object as? DetachedJSONWindow)?.persistFrameUnlessFullScreen()
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? DetachedJSONWindow, window === detachedWindow else { return }
-        // Saved here rather than by autosave, so that the size the user chose
-        // survives while the tear-off gesture still owns first placement.
-        window.saveFrame(usingName: DetachedJSONWindow.frameName)
+        // Saved by hand rather than by autosave, so the tear-off gesture still
+        // owns first placement; see DetachedJSONWindow.frameName.
+        window.persistFrameUnlessFullScreen()
         detachedWindow = nil
         // Nothing is watching for ⌘+ / ⌘− any more until a surface reopens.
         if let keyMonitor, !popover.isShown {
