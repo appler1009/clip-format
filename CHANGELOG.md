@@ -4,7 +4,7 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
-## Unreleased
+## 0.4.0
 
 - JSONC. `.jsonc` files, and any `.json` that tooling has written loosely —
   `tsconfig.json`, VS Code settings — are read instead of refused: `//` and
@@ -17,9 +17,11 @@ workflow refuses to build a tag that disagrees with it.
 
 Strict JSON is still tried first and is never re-read loosely, so a document
 that parses as RFC 8259 JSON is reported as JSON. Two consequences worth
-knowing: a trailing comma is no longer an error anywhere, since such a document
-is valid JSONC; and neither comments nor trailing commas survive the
-formatting, because the output is rebuilt from the parsed value — `{"a":1,}`
+knowing: a trailing comma is no longer an error in a JSON document, since such
+a document is valid JSONC (JSON Lines records stay strict, that format being
+defined as one valid JSON value per line); and neither comments nor trailing
+commas survive the formatting, because the output is rebuilt from the parsed
+value — `{"a":1,}`
 comes back as `{"a":1}`.
 
 ## 0.3.0
