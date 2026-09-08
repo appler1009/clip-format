@@ -197,6 +197,11 @@ final class FormatCanvasTests: XCTestCase {
         let json = FormatCanvas.model(from: "\u{FEFF}{\"a\":1}")
         XCTAssertEqual(json.kind, .json)
         XCTAssertTrue(json.isValid)
+
+        // And one that is not the very first scalar.
+        let indented = FormatCanvas.model(from: "\n\u{FEFF}<a/>")
+        XCTAssertEqual(indented.kind, .xml)
+        XCTAssertTrue(indented.isValid)
     }
 
     func testFailedXMLStillReportsItselfAsXML() {

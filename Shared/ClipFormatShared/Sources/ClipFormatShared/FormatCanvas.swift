@@ -18,9 +18,12 @@ public enum FormatCanvas {
         // A byte order mark is not whitespace to `trimmingCharacters`, so it
         // would survive and sit in front of the first `{` or `<` — where every
         // shape check in this function looks. Editors on Windows write one
-        // routinely.
-        let withoutBOM = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
-        let trimmed = withoutBOM.trimmingCharacters(in: .whitespacesAndNewlines)
+        // routinely, and the loop covers the rarer case of one that is not the
+        // very first scalar.
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmed.hasPrefix("\u{FEFF}") {
+            trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         guard !trimmed.isEmpty else {
             return FormattedDocument(source: trimmed, indent: indent, value: nil,

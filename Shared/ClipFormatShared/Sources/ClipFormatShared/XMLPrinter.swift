@@ -18,7 +18,8 @@ public enum XMLPrinter {
     }
 
     /// One line, with the whitespace between elements dropped. Text inside an
-    /// element is left alone: collapsing it would change what the document says.
+    /// element is trimmed at its edges, as the formatted view trims it — see
+    /// the README's note about `xml:space="preserve"`.
     public static func minified(_ nodes: [XMLValue]) -> String {
         var out = ""
         for node in nodes where !node.isInsignificantWhitespace {

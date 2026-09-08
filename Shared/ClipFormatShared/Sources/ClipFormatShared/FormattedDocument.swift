@@ -13,7 +13,8 @@ public enum DocumentKind: String, Sendable, Equatable {
     case xml
 }
 
-/// The result of trying to read some text as JSON: what both hosts render.
+/// The result of trying to read some text as one of the formats this app
+/// knows: what both hosts render.
 public struct FormattedDocument: Sendable {
     /// Text as it arrived (clipboard string or file contents), trimmed.
     public let source: String
@@ -34,7 +35,8 @@ public struct FormattedDocument: Sendable {
     /// token stream stops early.
     public let isTruncated: Bool
 
-    /// Syntax-classified formatted output, empty when the source is not JSON.
+    /// Syntax-classified formatted output, empty when the source did not parse
+    /// as anything.
     /// Computed once at parse time — SwiftUI re-evaluates `body` far too often
     /// to re-run the printer per frame.
     public let tokens: [SyntaxToken]
@@ -65,7 +67,7 @@ public struct FormattedDocument: Sendable {
     /// callers can tell which format was being read without matching on the
     /// wording of the message.
     public init(source: String, indent: Int, xmlNodes: [XMLValue],
-                errorTitle: String = "Not JSON", errorMessage: String? = nil,
+                errorTitle: String = "Not XML", errorMessage: String? = nil,
                 isTruncated: Bool = false) {
         self.source = source
         self.indent = indent

@@ -1,6 +1,6 @@
 # ClipFormat
 
-A free macOS menu-bar app that shows you the JSON on your clipboard, formatted — and brings the same formatting to Finder's Quick Look.
+A free macOS menu-bar app that shows you the JSON or XML on your clipboard, formatted — and brings the same formatting to Finder's Quick Look.
 
 Copy some JSON or XML, and the menu-bar icon turns green. Click it, and there's your payload, indented and syntax-coloured. Press Space on a `.json`, `.jsonc`, `.jsonl`, `.ndjson` or `.xml` file in Finder, and you get the same view.
 
@@ -8,7 +8,7 @@ Still free, still no paywall.
 
 ## What it does
 
-- **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds valid JSON, a red ✕ when it doesn't.
+- **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds something this app can format, a red ✕ when it holds JSON or XML that does not parse.
 - **Click for the formatted view** — syntax-coloured, selectable, scrollable, with **Copy Pretty** and **Copy Minified**.
 - **Tear it off** — drag the popover away from the menu bar and it becomes a window that keeps following the clipboard. Resizable, remembers its frame, Escape to close.
 - **Quick Look for `.json`, `.jsonc`, `.jsonl`, `.ndjson` and `.xml` files** — Spacebar in Finder renders through the same code the popover uses.
@@ -76,7 +76,7 @@ If it still doesn't attach: keep the app in `/Applications`, open it once, and c
 - Formatted output is capped at 500,000 characters on screen; past that the view is truncated with a notice. **Copy Pretty** still gives you the whole thing.
 - Sources over 32 MB aren't parsed. Quick Look reads a file whole or not at all: past that limit it says so by size, because a leading slice of a JSON document cannot parse and reporting it as malformed would be a lie. A 32 MB document can still take long enough to bump against Quick Look's time budget.
 - XML attributes keep their source order, but namespace declarations are printed first regardless of where they appeared — `XMLDocument` reports them separately from the other attributes and their original position is not recoverable.
-- Text inside an element is trimmed of surrounding whitespace, in the formatted view and in **Copy Pretty** alike. That is what keeps `<title>Hi</title>` on one line, but it does rewrite a document that leans on leading or trailing spaces, including one that sets `xml:space="preserve"`.
+- Text inside an element is trimmed of surrounding whitespace everywhere — the formatted view, **Copy Pretty** and **Copy Minified**. That is what keeps `<title>Hi</title>` on one line, but it does rewrite a document that leans on leading or trailing spaces, including one that sets `xml:space="preserve"`.
 - CDATA is shown as text. It parses and renders correctly, but the `<![CDATA[…]]>` wrapper is not reproduced.
 - Comments are read, not kept. Formatting is driven by the parsed value, so **Copy Pretty** and the rendered view show the JSON without the comments that were in the source.
 - Strict JSON is tried first and never re-read loosely: a document that parses as RFC 8259 JSON is reported as JSON, and the looser rules are only considered once that has failed. The consequence is that a trailing comma no longer produces a parse error in a JSON document — such a document is valid JSONC, and the menu-bar badge goes green for it. JSON Lines records stay strict, since that format is defined as one valid JSON value per line.
