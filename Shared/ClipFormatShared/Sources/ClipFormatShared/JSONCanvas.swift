@@ -23,7 +23,8 @@ public enum JSONCanvas {
         }
         guard trimmed.utf8.count <= sourceByteLimit else {
             return PrettyJSONDocument(source: String(trimmed.prefix(4_000)), indent: indent, value: nil,
-                                      errorMessage: "Too large to format (over \(sourceByteLimit / 1_048_576) MB)",
+                                      errorTitle: "Too large",
+                                      errorMessage: "Over the \(sourceByteLimit / 1_048_576) MB limit",
                                       isTruncated: true)
         }
         guard looksLikeJSON(trimmed) else {
@@ -41,6 +42,33 @@ public enum JSONCanvas {
             return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: error.localizedDescription)
         }
+    }
+
+    /// Reads a file as JSON.
+    ///
+    /// The whole file is read or none of it is. Parsing needs a complete
+    /// document, so handing the parser a leading slice of a large file reports
+    /// good JSON as malformed; past `byteLimit` we say so by size instead.
+    ///
+    /// - Parameter byteLimit: overridable for tests; production callers take
+    ///   the default.
+    public static func model(contentsOf url: URL, indent: Int = 2,
+                             byteLimit: Int = sourceByteLimit) throws -> PrettyJSONDocument {
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size > byteLimit else {
+            return model(from: try Data(contentsOf: url, options: .mappedIfSafe), indent: indent)
+        }
+
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let head = try handle.read(upToCount: 4_000) ?? Data()
+        let actual = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+        let limit = ByteCountFormatter.string(fromByteCount: Int64(byteLimit), countStyle: .file)
+        return PrettyJSONDocument(source: String(decoding: head, as: UTF8.self), indent: indent,
+                                  value: nil,
+                                  errorTitle: "Too large",
+                                  errorMessage: "\(actual) file, over the \(limit) preview limit",
+                                  isTruncated: true)
     }
 
     public static func model(from data: Data, indent: Int = 2) -> PrettyJSONDocument {
@@ -101,10 +129,11 @@ public enum JSONCanvas {
             }
             body = "<pre class=\"json\">\(code)</pre>"
         } else {
+            let title = escapeHTML(document.errorTitle)
             let message = escapeHTML(document.errorMessage ?? "Not JSON")
             let excerpt = escapeHTML(document.rawExcerpt(limit: 2_000))
             body = """
-            <div class="notice"><span class="badge">Not JSON</span><span class="reason">\(message)</span></div>
+            <div class="notice"><span class="badge">\(title)</span><span class="reason">\(message)</span></div>
             <pre class="raw">\(excerpt)</pre>
             """
         }
