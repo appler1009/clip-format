@@ -13,7 +13,7 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
     func providePreview(for request: QLFilePreviewRequest) async throws -> QLPreviewReply {
         let prefs = SharedFormattingPreferences.load()
         let document = try Self.document(for: request.fileURL, indent: prefs.indentWidth)
-        let html = Data(JSONCanvas.html(from: document, appearance: nil,
+        let html = Data(FormatCanvas.html(from: document, appearance: nil,
                                         fontSize: CGFloat(prefs.fontSize)).utf8)
 
         return QLPreviewReply(dataOfContentType: .html,
@@ -23,7 +23,7 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         }
     }
 
-    static func document(for url: URL, indent: Int = AppGroup.defaultIndentWidth) throws -> PrettyJSONDocument {
-        try JSONCanvas.model(contentsOf: url, indent: indent)
+    static func document(for url: URL, indent: Int = AppGroup.defaultIndentWidth) throws -> FormattedDocument {
+        try FormatCanvas.model(contentsOf: url, indent: indent)
     }
 }

@@ -14,7 +14,7 @@ struct PopoverView: View {
 
     private var appearance: Appearance { colorScheme == .dark ? .dark : .light }
     private var theme: Theme { Theme.theme(for: appearance) }
-    private var document: PrettyJSONDocument { monitor.document }
+    private var document: FormattedDocument { monitor.document }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,7 +80,7 @@ struct PopoverView: View {
     private var content: some View {
         if document.isValid {
             ScrollView([.vertical, .horizontal]) {
-                Text(JSONCanvas.attributedString(from: document, appearance: appearance,
+                Text(FormatCanvas.attributedString(from: document, appearance: appearance,
                                                 fontSize: CGFloat(preferences.fontSize)))
                     .textSelection(.enabled)
                     .padding(14)

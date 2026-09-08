@@ -1,9 +1,9 @@
 import Foundation
 import SwiftUI
 
-public extension JSONCanvas {
+public extension FormatCanvas {
     /// The popover's counterpart to `html(from:)` — same tokens, same theme.
-    static func attributedString(from document: PrettyJSONDocument,
+    static func attributedString(from document: FormattedDocument,
                                  appearance: Appearance,
                                  fontSize: CGFloat = 12) -> AttributedString {
         let theme = Theme.theme(for: appearance)
