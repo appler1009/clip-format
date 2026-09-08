@@ -21,8 +21,7 @@ knowing: a trailing comma is no longer an error in a JSON document, since such
 a document is valid JSONC (JSON Lines records stay strict, that format being
 defined as one valid JSON value per line); and neither comments nor trailing
 commas survive the formatting, because the output is rebuilt from the parsed
-value — `{"a":1,}`
-comes back as `{"a":1}`.
+value — `{"a":1,}` comes back as `{"a":1}`.
 
 ## 0.3.0
 
