@@ -67,7 +67,7 @@ public struct Theme: Sendable {
         appearance == .dark ? .dark : .light
     }
 
-    public func color(for kind: JSONToken.Kind) -> RGB {
+    public func color(for kind: SyntaxToken.Kind) -> RGB {
         switch kind {
         case .key: return key
         case .string: return string

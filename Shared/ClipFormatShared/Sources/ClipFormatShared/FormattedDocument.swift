@@ -12,7 +12,7 @@ public enum DocumentKind: String, Sendable, Equatable {
 }
 
 /// The result of trying to read some text as JSON: what both hosts render.
-public struct PrettyJSONDocument: Sendable {
+public struct FormattedDocument: Sendable {
     /// Text as it arrived (clipboard string or file contents), trimmed.
     public let source: String
     public let indent: Int
@@ -32,7 +32,7 @@ public struct PrettyJSONDocument: Sendable {
     /// Syntax-classified formatted output, empty when the source is not JSON.
     /// Computed once at parse time — SwiftUI re-evaluates `body` far too often
     /// to re-run the printer per frame.
-    public let tokens: [JSONToken]
+    public let tokens: [SyntaxToken]
 
     public var isValid: Bool { !records.isEmpty }
 
@@ -70,8 +70,8 @@ public struct PrettyJSONDocument: Sendable {
         }
         let printed = Self.tokens(for: records, kind: kind, indent: indent)
         let length = printed.reduce(0) { $0 + $1.text.count }
-        if length > JSONCanvas.renderCharacterLimit {
-            self.tokens = JSONCanvas.truncate(printed, toCharacters: JSONCanvas.renderCharacterLimit)
+        if length > FormatCanvas.renderCharacterLimit {
+            self.tokens = FormatCanvas.truncate(printed, toCharacters: FormatCanvas.renderCharacterLimit)
             self.isTruncated = true
         } else {
             self.tokens = printed
@@ -81,13 +81,13 @@ public struct PrettyJSONDocument: Sendable {
 
     /// A blank line between records keeps a JSON Lines file readable once each
     /// record is expanded over several lines of its own.
-    private static func tokens(for records: [JSONValue], kind: DocumentKind, indent: Int) -> [JSONToken] {
+    private static func tokens(for records: [JSONValue], kind: DocumentKind, indent: Int) -> [SyntaxToken] {
         guard kind == .lineDelimited else {
             return PrettyPrinter.tokens(for: records[0], indent: indent)
         }
-        var tokens: [JSONToken] = []
+        var tokens: [SyntaxToken] = []
         for (offset, record) in records.enumerated() {
-            if offset > 0 { tokens.append(JSONToken(kind: .whitespace, text: "\n\n")) }
+            if offset > 0 { tokens.append(SyntaxToken(kind: .whitespace, text: "\n\n")) }
             tokens.append(contentsOf: PrettyPrinter.tokens(for: record, indent: indent))
         }
         return tokens

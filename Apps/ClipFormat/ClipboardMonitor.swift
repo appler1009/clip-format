@@ -2,14 +2,14 @@ import AppKit
 import ClipFormatShared
 import Combine
 
-/// Watches the general pasteboard and republishes it as a `PrettyJSONDocument`.
+/// Watches the general pasteboard and republishes it as a `FormattedDocument`.
 ///
 /// AppKit has no pasteboard-change notification, so we poll `changeCount` — the
 /// cheap integer read, not the payload — and only re-read the contents when it
 /// moves.
 @MainActor
 final class ClipboardMonitor: ObservableObject {
-    @Published private(set) var document: PrettyJSONDocument
+    @Published private(set) var document: FormattedDocument
     @Published private(set) var isFormatting = false
 
     private let pasteboard: NSPasteboard
@@ -25,7 +25,7 @@ final class ClipboardMonitor: ObservableObject {
         self.pasteboard = pasteboard
         self.preferences = preferences
         self.lastChangeCount = pasteboard.changeCount - 1
-        self.document = JSONCanvas.model(from: "", indent: preferences.indentWidth)
+        self.document = FormatCanvas.model(from: "", indent: preferences.indentWidth)
 
         // The new indent has to come from the stream: `@Published` fires in
         // `willSet`, so reading `preferences.indentWidth` here would re-render
@@ -58,18 +58,18 @@ final class ClipboardMonitor: ObservableObject {
         lastChangeCount = changeCount
 
         guard let text = readText() else {
-            document = JSONCanvas.model(from: "", indent: indent)
+            document = FormatCanvas.model(from: "", indent: indent)
             return
         }
 
         guard text.utf8.count > Self.asyncThreshold else {
-            document = JSONCanvas.model(from: text, indent: indent)
+            document = FormatCanvas.model(from: text, indent: indent)
             return
         }
 
         isFormatting = true
         Task.detached(priority: .userInitiated) {
-            let model = JSONCanvas.model(from: text, indent: indent)
+            let model = FormatCanvas.model(from: text, indent: indent)
             await MainActor.run {
                 // A newer copy may have landed while we were parsing.
                 guard self.lastChangeCount == changeCount else { return }
