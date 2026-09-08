@@ -10,7 +10,8 @@ import AppKit
 /// view — that is the blank-window bug.
 @MainActor
 final class DetachedJSONWindow: NSWindow {
-    /// Saved on close rather than continuously, and applied only when one
+    /// Written at commit points — the end of a live resize, the start of a
+    /// full-screen transition, close and quit — and applied only when one
     /// exists, so the tear-off gesture places a first-ever window itself.
     static let frameName = NSWindow.FrameAutosaveName("ClipFormatDetachedJSON")
 
@@ -46,11 +47,28 @@ final class DetachedJSONWindow: NSWindow {
         close()
     }
 
-    /// Remembers the frame, unless the window is in full screen — where
-    /// `frame` is the whole display, and restoring that next time would open a
-    /// torn-off window the size of the screen.
+    /// True from the start of the enter-full-screen animation until the exit
+    /// has finished. `styleMask` is not a reliable signal for this: it does not
+    /// necessarily carry `.fullScreen` while AppKit is growing the window
+    /// toward the display, so the animation's intermediate frames would be
+    /// saved as if the user had resized to nearly the screen.
+    private var isFullScreenOrTransitioning = false
+
+    /// Remembers the frame, unless the window is full screen or on its way —
+    /// where `frame` is (or is becoming) the whole display, and restoring that
+    /// next time would open a torn-off window the size of the screen.
     func persistFrameUnlessFullScreen() {
-        guard !styleMask.contains(.fullScreen) else { return }
+        guard !isFullScreenOrTransitioning else { return }
         saveFrame(usingName: Self.frameName)
+    }
+
+    /// Snapshots the windowed frame before AppKit starts growing it.
+    func willEnterFullScreen() {
+        persistFrameUnlessFullScreen()
+        isFullScreenOrTransitioning = true
+    }
+
+    func didExitFullScreen() {
+        isFullScreenOrTransitioning = false
     }
 }

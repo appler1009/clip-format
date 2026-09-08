@@ -84,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         monitor.stop()
         removeDismissMonitor()
+        // windowDidMove has no "ended" sibling, so a window that was dragged
+        // and never resized is recorded here.
+        detachedWindow?.persistFrameUnlessFullScreen()
     }
 
     // MARK: - Status item
@@ -324,15 +327,19 @@ extension AppDelegate: NSPopoverDelegate {
 }
 
 extension AppDelegate: NSWindowDelegate {
-    // Recorded as it happens rather than on close, so that leaving the window
-    // in full screen — or quitting with it open — still restores the size the
-    // user last chose.
-    func windowDidResize(_ notification: Notification) {
+    // Commit points only. windowDidResize is the live-resize stream — one
+    // UserDefaults write per pixel — and its frames during the full-screen
+    // animation are on their way to the size of the display.
+    func windowDidEndLiveResize(_ notification: Notification) {
         (notification.object as? DetachedJSONWindow)?.persistFrameUnlessFullScreen()
     }
 
-    func windowDidMove(_ notification: Notification) {
-        (notification.object as? DetachedJSONWindow)?.persistFrameUnlessFullScreen()
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        (notification.object as? DetachedJSONWindow)?.willEnterFullScreen()
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        (notification.object as? DetachedJSONWindow)?.didExitFullScreen()
     }
 
     func windowWillClose(_ notification: Notification) {
