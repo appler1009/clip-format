@@ -59,6 +59,14 @@ public enum JSONParser {
         /// default: RFC 8259 has no comments, and accepting them everywhere
         /// would make the strict reading a lie.
         public static let comments = Options(rawValue: 1 << 0)
+
+        /// Accept a comma before the closing `}` or `]`. Tooling writes these
+        /// next to comments — `tsconfig.json` has both — and a diff that adds
+        /// one line should not have to touch the line above it.
+        public static let trailingCommas = Options(rawValue: 1 << 1)
+
+        /// What a `.jsonc` file is allowed: comments and trailing commas.
+        public static let jsonc: Options = [.comments, .trailingCommas]
     }
 
     public static func parse(_ text: String, options: Options = []) throws -> JSONValue {
@@ -175,7 +183,14 @@ public enum JSONParser {
                 members.append((key, try parseValue(depth: depth + 1)))
                 skipWhitespace()
                 switch current {
-                case ",": index += 1
+                case ",":
+                    index += 1
+                    // A comma before `}` closes the object when the format
+                    // allows it; strict JSON still calls it a missing key.
+                    if options.contains(.trailingCommas) {
+                        skipWhitespace()
+                        if current == "}" { index += 1; return .object(members) }
+                    }
                 case "}": index += 1; return .object(members)
                 case nil: throw error("Unterminated object")
                 default: throw error("Expected ',' or '}' in object")
@@ -193,7 +208,12 @@ public enum JSONParser {
                 elements.append(try parseValue(depth: depth + 1))
                 skipWhitespace()
                 switch current {
-                case ",": index += 1
+                case ",":
+                    index += 1
+                    if options.contains(.trailingCommas) {
+                        skipWhitespace()
+                        if current == "]" { index += 1; return .array(elements) }
+                    }
                 case "]": index += 1; return .array(elements)
                 case nil: throw error("Unterminated array")
                 default: throw error("Expected ',' or ']' in array")

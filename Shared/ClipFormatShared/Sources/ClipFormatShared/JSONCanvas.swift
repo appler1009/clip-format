@@ -58,11 +58,11 @@ public enum JSONCanvas {
             break
         }
 
-        // JSON with comments. Anything succeeding here needed the comment rules,
-        // since strict parsing has already been tried. Objects and arrays only,
-        // the same rule `looksLikeJSON` applies to the other kinds: `// note`
-        // followed by `42` is no more a JSONC document than a bare `42` is a
-        // JSON one.
+        // JSONC: comments and trailing commas. Anything succeeding here needed
+        // those rules, since strict parsing has already been tried. Objects and
+        // arrays only, the same rule `looksLikeJSON` applies to the other
+        // kinds: `// note` followed by `42` is no more a JSONC document than a
+        // bare `42` is a JSON one.
         //
         // Once the source is committed to this stage — strict already failed,
         // or it opens with a comment — the error from *this* parse is the one
@@ -72,14 +72,14 @@ public enum JSONCanvas {
         // Cheap and deliberately loose: a marker inside a string would also
         // match, but this only decides which error is shown, never whether the
         // source is valid.
-        let isCommentShaped = documentError != nil || trimmed.contains("//") || trimmed.contains("/*")
+        let isJSONCShaped = documentError != nil || trimmed.contains("//") || trimmed.contains("/*")
         do {
-            let value = try JSONParser.parse(trimmed, options: .comments)
+            let value = try JSONParser.parse(trimmed, options: .jsonc)
             if value.isContainer {
                 return PrettyJSONDocument(source: trimmed, indent: indent,
-                                          records: [value], kind: .commented, errorMessage: nil)
+                                          records: [value], kind: .jsonc, errorMessage: nil)
             }
-        } catch let commentError as JSONParseError where isCommentShaped {
+        } catch let commentError as JSONParseError where isJSONCShaped {
             return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: commentError.message)
         } catch {

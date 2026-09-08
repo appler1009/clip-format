@@ -60,7 +60,7 @@ struct PopoverView: View {
         switch document.kind {
         case .json: return "Clipboard is JSON"
         case .lineDelimited: return "Clipboard is JSON Lines"
-        case .commented: return "Clipboard is JSON with comments"
+        case .jsonc: return "Clipboard is JSONC"
         }
     }
 
