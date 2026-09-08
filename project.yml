@@ -47,8 +47,6 @@ targets:
           CODE_SIGN_ENTITLEMENTS: Apps/ClipFormat/ClipFormat.debug.entitlements
         Release:
           CODE_SIGN_ENTITLEMENTS: Apps/ClipFormat/ClipFormat.entitlements
-          # Filled by Scripts/package.sh when a Developer ID profile is installed.
-          PROVISIONING_PROFILE: $(APP_PROVISIONING_PROFILE)
 
   ClipFormatPreview:
     type: app-extension
@@ -66,9 +64,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: Extensions/ClipFormatPreview/ClipFormatPreview.entitlements
         SKIP_INSTALL: YES
-      configs:
-        Release:
-          PROVISIONING_PROFILE: $(PREVIEW_PROVISIONING_PROFILE)
 
 schemes:
   ClipFormat:
