@@ -65,10 +65,10 @@ public enum JSONCanvas {
         // bare `42` is a JSON one.
         //
         // Once the source is committed to this stage — strict already failed,
-        // or it opens with a comment — the error from *this* parse is the one
-        // to report. A tsconfig.json with comments and a trailing comma fails
-        // strict at the first `/`, and saying so would point at the comment
-        // rather than the comma that is actually wrong.
+        // or a comment marker is present — the error from *this* parse is the
+        // one to report. A commented file with something genuinely wrong in it
+        // fails strict at the first `/`, and saying so would point at the
+        // comment rather than at the fault.
         // Cheap and deliberately loose: a marker inside a string would also
         // match, but this only decides which error is shown, never whether the
         // source is valid.
@@ -126,6 +126,11 @@ public enum JSONCanvas {
         for line in lines {
             guard looksLikeJSON(line.text) else { return .notLineDelimited }
             do {
+                // Strict, deliberately: JSON Lines is defined as one *valid
+                // JSON* value per line, and a record with a trailing comma is
+                // a malformed record rather than a loosely written document.
+                // Reading lines with `.jsonc` would also blunt the error, which
+                // here can name the line that is wrong.
                 records.append(try JSONParser.parse(line.text))
             } catch let error as JSONParseError {
                 return .lineError(error, line: line.number)

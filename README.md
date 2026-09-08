@@ -75,10 +75,10 @@ If it still doesn't attach: keep the app in `/Applications`, open it once, and c
 - Formatted output is capped at 500,000 characters on screen; past that the view is truncated with a notice. **Copy Pretty** still gives you the whole thing.
 - Sources over 32 MB aren't parsed. Quick Look reads a file whole or not at all: past that limit it says so by size, because a leading slice of a JSON document cannot parse and reporting it as malformed would be a lie. A 32 MB document can still take long enough to bump against Quick Look's time budget.
 - Comments are read, not kept. Formatting is driven by the parsed value, so **Copy Pretty** and the rendered view show the JSON without the comments that were in the source.
-- Strict JSON is tried first and never re-read loosely: a document that parses as RFC 8259 JSON is reported as JSON, and the looser rules are only considered once that has failed. The consequence is that a trailing comma no longer produces a parse error anywhere — such a document is valid JSONC, and the menu-bar badge goes green for it.
+- Strict JSON is tried first and never re-read loosely: a document that parses as RFC 8259 JSON is reported as JSON, and the looser rules are only considered once that has failed. The consequence is that a trailing comma no longer produces a parse error in a JSON document — such a document is valid JSONC, and the menu-bar badge goes green for it. JSON Lines records stay strict, since that format is defined as one valid JSON value per line.
 - JSON Lines is all or nothing: every non-empty line has to parse, and each has to be an object or an array. One bad line and the whole thing is reported as a broken JSON document instead, which keeps the parse error visible rather than burying it.
 - Quick Look is a snapshot: change indent or font size, then press Space again (or `qlmanage -r`) to see it. The preview does not live-update.
 
 ## Roadmap
 
-Thumbnail extension, XML, YAML, GeoJSON, collapsible tree view and key-path copy, secret masking for `password` / `token` keys, and the 2016 app's other formats — XML, stack traces, Base64 and URL decoding.
+Thumbnail extension, XML, YAML, GeoJSON, collapsible tree view and key-path copy, secret masking for `password` / `token` keys, and the 2016 app's other formats — stack traces, Base64 and URL decoding.

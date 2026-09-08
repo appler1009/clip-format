@@ -167,6 +167,24 @@ public enum JSONParser {
             }
         }
 
+        /// Consumes the comma, and reports whether the collection closed right
+        /// after it. Whatever separates the two is skipped first, so the shape
+        /// VS Code actually writes still parses:
+        ///
+        ///     "strict": true, // always
+        ///     }
+        ///
+        /// Strict JSON never takes this path: the comma stands, and the next
+        /// turn of the loop reports the missing member.
+        private mutating func consumedTrailingComma(before close: Unicode.Scalar) -> Bool {
+            index += 1 // ','
+            guard options.contains(.trailingCommas) else { return false }
+            skipWhitespace()
+            guard current == close else { return false }
+            index += 1
+            return true
+        }
+
         private mutating func parseObject(depth: Int) throws -> JSONValue {
             index += 1 // '{'
             var members: [(key: String, value: JSONValue)] = []
@@ -184,13 +202,7 @@ public enum JSONParser {
                 skipWhitespace()
                 switch current {
                 case ",":
-                    index += 1
-                    // A comma before `}` closes the object when the format
-                    // allows it; strict JSON still calls it a missing key.
-                    if options.contains(.trailingCommas) {
-                        skipWhitespace()
-                        if current == "}" { index += 1; return .object(members) }
-                    }
+                    if consumedTrailingComma(before: "}") { return .object(members) }
                 case "}": index += 1; return .object(members)
                 case nil: throw error("Unterminated object")
                 default: throw error("Expected ',' or '}' in object")
@@ -209,11 +221,7 @@ public enum JSONParser {
                 skipWhitespace()
                 switch current {
                 case ",":
-                    index += 1
-                    if options.contains(.trailingCommas) {
-                        skipWhitespace()
-                        if current == "]" { index += 1; return .array(elements) }
-                    }
+                    if consumedTrailingComma(before: "]") { return .array(elements) }
                 case "]": index += 1; return .array(elements)
                 case nil: throw error("Unterminated array")
                 default: throw error("Expected ',' or ']' in array")

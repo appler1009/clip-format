@@ -214,6 +214,31 @@ final class JSONCanvasTests: XCTestCase {
                        .object([(key: "a", value: .number("1"))]))
     }
 
+    func testCommentBetweenTheCommaAndTheBrace() {
+        // The shape VS Code writes: the comma is not the last thing before the
+        // brace, a comment is. Locks the skip between the two.
+        let object = JSONCanvas.model(from: """
+        {
+          "strict": true, // always
+        }
+        """)
+        XCTAssertTrue(object.isValid)
+        XCTAssertEqual(object.minifiedText, #"{"strict":true}"#)
+
+        let array = JSONCanvas.model(from: "[\n  1, /* and that is all */\n]")
+        XCTAssertTrue(array.isValid)
+        XCTAssertEqual(array.minifiedText, "[1]")
+    }
+
+    func testJSONLinesRecordsStayStrict() {
+        // Documented, not accidental: JSON Lines is one *valid JSON* value per
+        // line, so a trailing comma in a record is a bad record — and the error
+        // names the line rather than being softened into JSONC.
+        let document = JSONCanvas.model(from: "{\"a\":1,}\n{\"b\":2}")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorMessage?.contains("line 1"), true)
+    }
+
     func testALoneCommaIsStillAnError() {
         // Leniency is about a comma *after* a value, not commas anywhere.
         XCTAssertFalse(JSONCanvas.model(from: "{,}").isValid)
