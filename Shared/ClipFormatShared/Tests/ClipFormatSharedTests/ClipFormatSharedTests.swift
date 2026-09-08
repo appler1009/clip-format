@@ -186,6 +186,27 @@ final class FormatCanvasTests: XCTestCase {
         XCTAssertTrue(rendered.contains("xmlns:dc=\"http://purl.org/dc\""))
     }
 
+    func testByteOrderMarkDoesNotHideTheFormat() {
+        // A BOM is not whitespace to `trimmingCharacters`, so it used to sit in
+        // front of the first character every shape check looks at — the same
+        // way a namespace URL used to send XML down the JSON path.
+        let xml = FormatCanvas.model(from: "\u{FEFF}<feed xmlns=\"http://www.w3.org/2005/Atom\"><a/></feed>")
+        XCTAssertEqual(xml.kind, .xml)
+        XCTAssertTrue(xml.isValid)
+
+        let json = FormatCanvas.model(from: "\u{FEFF}{\"a\":1}")
+        XCTAssertEqual(json.kind, .json)
+        XCTAssertTrue(json.isValid)
+    }
+
+    func testFailedXMLStillReportsItselfAsXML() {
+        // So a host can say "isn't valid XML" without matching on the wording
+        // of the error.
+        let document = FormatCanvas.model(from: "<a><b></a>")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.kind, .xml)
+    }
+
     func testXMLWithANamespaceURLIsStillXML() {
         // Regression: the `//` in a namespace URL made the JSONC stage claim
         // this source and report "Unexpected character '<'", so the XML branch

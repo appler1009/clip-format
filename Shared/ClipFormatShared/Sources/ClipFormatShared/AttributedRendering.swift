@@ -12,7 +12,7 @@ public extension FormatCanvas {
             var piece = AttributedString(token.text)
             let rgb = theme.color(for: token.kind)
             piece.foregroundColor = Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
-            piece.font = .system(size: fontSize, weight: token.kind == .key ? .medium : .regular, design: .monospaced)
+            piece.font = .system(size: fontSize, weight: token.kind == .key || token.kind == .tagName ? .medium : .regular, design: .monospaced)
             result.append(piece)
         }
         return result

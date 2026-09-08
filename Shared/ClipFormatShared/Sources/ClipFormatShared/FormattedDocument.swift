@@ -60,7 +60,10 @@ public struct FormattedDocument: Sendable {
                   isTruncated: isTruncated)
     }
 
-    /// XML, whose tree is nothing like a JSON value's.
+    /// XML, whose tree is nothing like a JSON value's. Also the failure case:
+    /// pass no nodes and an error, and the document still reports `.xml`, so
+    /// callers can tell which format was being read without matching on the
+    /// wording of the message.
     public init(source: String, indent: Int, xmlNodes: [XMLValue],
                 errorTitle: String = "Not JSON", errorMessage: String? = nil,
                 isTruncated: Bool = false) {

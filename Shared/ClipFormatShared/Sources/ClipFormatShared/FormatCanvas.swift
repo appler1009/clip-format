@@ -15,7 +15,12 @@ public enum FormatCanvas {
     // MARK: - Model
 
     public static func model(from text: String, indent: Int = 2) -> FormattedDocument {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A byte order mark is not whitespace to `trimmingCharacters`, so it
+        // would survive and sit in front of the first `{` or `<` — where every
+        // shape check in this function looks. Editors on Windows write one
+        // routinely.
+        let withoutBOM = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
+        let trimmed = withoutBOM.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmed.isEmpty else {
             return FormattedDocument(source: trimmed, indent: indent, value: nil,
@@ -38,10 +43,10 @@ public enum FormatCanvas {
                 return FormattedDocument(source: trimmed, indent: indent,
                                          xmlNodes: try XMLReader.parse(trimmed))
             } catch let error as XMLParseError {
-                return FormattedDocument(source: trimmed, indent: indent, value: nil,
+                return FormattedDocument(source: trimmed, indent: indent, xmlNodes: [],
                                          errorTitle: "Not XML", errorMessage: error.message)
             } catch {
-                return FormattedDocument(source: trimmed, indent: indent, value: nil,
+                return FormattedDocument(source: trimmed, indent: indent, xmlNodes: [],
                                          errorTitle: "Not XML", errorMessage: error.localizedDescription)
             }
         }
