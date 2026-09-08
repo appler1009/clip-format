@@ -13,6 +13,8 @@
 			<key>QLSupportedContentTypes</key>
 			<array>
 				<string>public.json</string>
+				<string>public.ndjson</string>
+				<string>com.appler1009.jsonl</string>
 			</array>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

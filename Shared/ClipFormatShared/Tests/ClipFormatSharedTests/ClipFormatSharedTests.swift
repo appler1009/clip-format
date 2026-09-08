@@ -127,6 +127,57 @@ final class JSONCanvasTests: XCTestCase {
         XCTAssertEqual(JSONCanvas.model(from: data).minifiedText, #"{"emoji":"😀"}"#)
     }
 
+    // MARK: - JSON Lines
+
+    func testParsesJSONLines() {
+        let document = JSONCanvas.model(from: #"{"a":1}\n{"a":2}\n{"a":3}"#.replacingOccurrences(of: "\\n", with: "\n"))
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .lineDelimited)
+        XCTAssertEqual(document.recordCount, 3)
+        // No single value: JSON Lines is not one document.
+        XCTAssertNil(document.value)
+    }
+
+    func testJSONLinesRoundTripsThroughCopyMinified() {
+        let source = "{\"a\":1}\n{\"b\":[2,3]}"
+        let document = JSONCanvas.model(from: source)
+        XCTAssertEqual(document.minifiedText, source)
+        // Pretty puts a blank line between records so they stay apart once
+        // each is expanded.
+        XCTAssertEqual(document.prettyText, "{\n  \"a\": 1\n}\n\n{\n  \"b\": [\n    2,\n    3\n  ]\n}")
+    }
+
+    func testBlankLinesBetweenRecordsAreIgnored() {
+        let document = JSONCanvas.model(from: "{\"a\":1}\n\n\n{\"a\":2}\n")
+        XCTAssertEqual(document.recordCount, 2)
+    }
+
+    func testSingleDocumentIsNotTreatedAsLines() {
+        let document = JSONCanvas.model(from: "{\n  \"a\": 1\n}")
+        XCTAssertEqual(document.kind, .json)
+        XCTAssertEqual(document.recordCount, 1)
+        XCTAssertNotNil(document.value)
+    }
+
+    func testOneBadLineFailsTheWholeThing() {
+        // Reporting a broken document as "not JSON Lines either" would bury the
+        // parse error, so a single bad line keeps the document error.
+        let document = JSONCanvas.model(from: "{\"a\":1}\n{\"a\":}\n{\"a\":3}")
+        XCTAssertFalse(document.isValid)
+        XCTAssertNotNil(document.errorMessage)
+    }
+
+    func testBareLiteralLinesAreNotJSONLines() {
+        XCTAssertFalse(JSONCanvas.model(from: "42\n43\n44").isValid)
+    }
+
+    func testJSONLinesTokensCarryEveryRecord() {
+        let document = JSONCanvas.model(from: "{\"a\":1}\n{\"a\":2}")
+        let rendered = document.tokens.map(\.text).joined()
+        XCTAssertTrue(rendered.contains("\"a\": 1"))
+        XCTAssertTrue(rendered.contains("\"a\": 2"))
+    }
+
     func testReadsWholeFileRatherThanALeadingSlice() throws {
         // Regression: the Quick Look extension used to parse the first 8 MB of
         // a file, so any larger file — however valid — came back "Not JSON".

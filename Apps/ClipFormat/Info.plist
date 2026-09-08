@@ -10,6 +10,30 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<!-- macOS declares public.ndjson for .ndjson but nothing for
+			     .jsonl, and public.* is Apple's to hand out, so the app
+			     declares that one half under its own identifier. The preview
+			     extension claims both. -->
+			<key>UTTypeIdentifier</key>
+			<string>com.appler1009.jsonl</string>
+			<key>UTTypeDescription</key>
+			<string>JSON Lines</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>jsonl</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>NSHumanReadableCopyright</key>
 	<string>ClipFormat — free, no paywall.</string>
 	<key>NSSupportsAutomaticTermination</key>

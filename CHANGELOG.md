@@ -4,6 +4,19 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.3.0
+
+- JSON Lines. A file or clipboard holding one JSON value per line — the format
+  also called NDJSON — is recognised as such rather than reported as a broken
+  document. Each record is expanded in turn, the header counts them, and
+  **Copy Minified** gives the file's own shape back, one record per line.
+- Quick Look now previews `.jsonl` and `.ndjson` alongside `.json`.
+
+Detection is deliberately strict: every non-empty line has to parse and each
+has to be an object or an array. One bad line and the source is reported as a
+broken JSON document, so the parse error stays visible instead of being
+swallowed by a guess about the format.
+
 ## 0.2.0
 
 - The popover tears off into a window. Drag it away from the status item and it

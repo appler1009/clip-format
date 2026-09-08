@@ -36,12 +36,46 @@ public enum JSONCanvas {
             let value = try JSONParser.parse(trimmed)
             return PrettyJSONDocument(source: trimmed, indent: indent, value: value, errorMessage: nil)
         } catch let error as JSONParseError {
+            // A JSON Lines file starts `{` and ends `}` like a document does,
+            // so it arrives here as "trailing content" first. Try it as lines
+            // before reporting the failure.
+            if let records = lineDelimitedRecords(trimmed) {
+                return PrettyJSONDocument(source: trimmed, indent: indent,
+                                          records: records, kind: .lineDelimited,
+                                          errorMessage: nil)
+            }
             return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: error.message)
         } catch {
             return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: error.localizedDescription)
         }
+    }
+
+    /// Reads `trimmed` as JSON Lines (NDJSON): one JSON value per line.
+    ///
+    /// Returns nil unless *every* non-empty line parses, so a JSON document
+    /// with a typo is still reported as a broken document rather than being
+    /// quietly re-read as lines. Objects and arrays only, matching
+    /// `looksLikeJSON`: a file of bare numbers is not what anyone means by
+    /// JSON Lines.
+    static func lineDelimitedRecords(_ trimmed: String) -> [JSONValue]? {
+        var lines = trimmed.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        lines.removeAll { $0.isEmpty }
+        guard lines.count > 1 else { return nil }
+
+        // Cheap gate before parsing megabytes of something that is not JSON at
+        // all: the first line has to look right.
+        guard looksLikeJSON(lines[0]) else { return nil }
+
+        var records: [JSONValue] = []
+        records.reserveCapacity(lines.count)
+        for line in lines {
+            guard looksLikeJSON(line), let value = try? JSONParser.parse(line) else { return nil }
+            records.append(value)
+        }
+        return records
     }
 
     /// Reads a file as JSON.

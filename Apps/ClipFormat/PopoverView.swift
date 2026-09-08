@@ -37,7 +37,7 @@ struct PopoverView: View {
             Circle()
                 .fill(document.isValid ? Color.green : Color.red)
                 .frame(width: 8, height: 8)
-            Text(document.isValid ? "Clipboard is JSON" : "Clipboard isn’t JSON")
+            Text(statusTitle)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(theme.foreground.color)
             if monitor.isFormatting {
@@ -55,13 +55,21 @@ struct PopoverView: View {
         .padding(.vertical, 10)
     }
 
+    private var statusTitle: String {
+        guard document.isValid else { return "Clipboard isn’t JSON" }
+        return document.kind == .lineDelimited ? "Clipboard is JSON Lines" : "Clipboard is JSON"
+    }
+
     private var statusDetail: String? {
-        if document.isValid {
-            let bytes = ByteCountFormatter.string(fromByteCount: Int64(document.source.utf8.count),
-                                                  countStyle: .file)
-            return document.isTruncated ? "\(bytes) · truncated" : bytes
-        }
-        return document.errorMessage
+        guard document.isValid else { return document.errorMessage }
+        let bytes = ByteCountFormatter.string(fromByteCount: Int64(document.source.utf8.count),
+                                              countStyle: .file)
+        // The record count is the thing worth knowing about a JSON Lines file;
+        // the byte count says little about how much is in it.
+        let summary = document.kind == .lineDelimited
+            ? "\(document.recordCount) records · \(bytes)"
+            : bytes
+        return document.isTruncated ? "\(summary) · truncated" : summary
     }
 
     @ViewBuilder
