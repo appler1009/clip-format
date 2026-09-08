@@ -36,13 +36,30 @@ cd Shared/ClipFormatShared && swift test
 
 ### App Group (Quick Look prefs)
 
-Both binaries already request `group.com.appler1009.ClipFormat`. On a paid team, register that group once so signing can share it:
+Both binaries request `TN2RQ5P647.group.com.appler1009.ClipFormat`. Outside the
+App Store macOS authorises a group by the **team ID prefix on the identifier**,
+so the id must start with the team id — a bare `group.…` is rejected, and
+`containermanagerd` says so in the log:
 
-1. [developer.apple.com/account](https://developer.apple.com/account) → **Identifiers** → **App Groups** → register `group.com.appler1009.ClipFormat`.
+```
+REJECTED. Group containers identifiers should be prefixed by requestor's
+team ID to allow access on this platform.
+```
+
+On a paid team, register the group once so both App IDs can claim it:
+
+1. [developer.apple.com/account](https://developer.apple.com/account) → **Identifiers** → **App Groups** → register `TN2RQ5P647.group.com.appler1009.ClipFormat`.
 2. Edit App IDs `com.appler1009.ClipFormat` and `com.appler1009.ClipFormat.Preview` → enable **App Groups** → tick that group.
-3. Or in Xcode: each target → **Signing & Capabilities** → **+ Capability** → **App Groups** → check the same id. Automatic signing refreshes the profiles.
+3. Or in Xcode: each target → **Signing & Capabilities** → **+ Capability** → **App Groups** → check the same id.
 
-Without that portal step, each process gets its own defaults file and Quick Look stays on the built-in 2-space / 12 pt defaults.
+Without that portal step, each process gets its own defaults file and Quick Look
+stays on the built-in 2-space / 12 pt defaults. No provisioning profile is
+involved: a Developer ID certificate signs the group entitlement on its own.
+
+The id changed after the first builds, and preferences do not migrate — indent,
+font size and badge visibility live in the old container. The first launch after
+this change looks like a preferences reset; set them again, or copy the old
+values across.
 
 ## Layout
 
@@ -126,7 +143,7 @@ be notarized for distribution.
 
 - The menu-bar badge deliberately ignores bare literals — copying `42` or `"hello"` is technically valid JSON but flagging it would make the badge meaningless. Objects and arrays count.
 - Formatted output is capped at 500,000 characters on screen; past that the view is truncated with a notice. **Copy Pretty** still gives you the whole thing.
-- Sources over 32 MB aren't parsed; Quick Look reads at most the first 8 MB of a file.
+- Sources over 32 MB aren't parsed. Quick Look reads a file whole or not at all: past that limit it says so by size, because a leading slice of a JSON document cannot parse and reporting it as malformed would be a lie. A 32 MB document can still take long enough to bump against Quick Look's time budget.
 - Quick Look is a snapshot: change indent or font size, then press Space again (or `qlmanage -r`) to see it. The preview does not live-update.
 
 ## Roadmap

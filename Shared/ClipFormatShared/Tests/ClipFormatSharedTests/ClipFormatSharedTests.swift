@@ -127,6 +127,37 @@ final class JSONCanvasTests: XCTestCase {
         XCTAssertEqual(JSONCanvas.model(from: data).minifiedText, #"{"emoji":"😀"}"#)
     }
 
+    func testReadsWholeFileRatherThanALeadingSlice() throws {
+        // Regression: the Quick Look extension used to parse the first 8 MB of
+        // a file, so any larger file — however valid — came back "Not JSON".
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipformat-large-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let entries = Array(repeating: #"{"k":"0123456789"}"#, count: 500_000).joined(separator: ",")
+        try Data(("[" + entries + "]").utf8).write(to: url)
+        XCTAssertGreaterThan(try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0, 8 * 1024 * 1024)
+
+        let document = try JSONCanvas.model(contentsOf: url)
+        XCTAssertTrue(document.isValid)
+        XCTAssertNil(document.errorMessage)
+    }
+
+    func testFileOverTheLimitIsRefusedBySizeNotCalledInvalid() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipformat-over-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"a":1,"b":2}"#.utf8).write(to: url)
+
+        let document = try JSONCanvas.model(contentsOf: url, byteLimit: 4)
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorTitle, "Too large")
+        XCTAssertTrue(document.errorMessage?.contains("limit") == true)
+        // The badge must not blame the file for being malformed.
+        let html = JSONCanvas.html(from: document, appearance: .light)
+        XCTAssertTrue(html.contains(">Too large<"))
+        XCTAssertFalse(html.contains(">Not JSON<"))
+    }
+
     func testTruncationAppendsNotice() {
         let tokens = PrettyPrinter.tokens(for: .array(Array(repeating: .number("1"), count: 200)), indent: 2)
         let truncated = JSONCanvas.truncate(tokens, toCharacters: 40)
