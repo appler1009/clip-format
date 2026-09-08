@@ -67,7 +67,7 @@ public struct Theme: Sendable {
         appearance == .dark ? .dark : .light
     }
 
-    public func color(for kind: JSONToken.Kind) -> RGB {
+    public func color(for kind: SyntaxToken.Kind) -> RGB {
         switch kind {
         case .key: return key
         case .string: return string
@@ -75,6 +75,13 @@ public struct Theme: Sendable {
         case .bool, .null: return literal
         case .punctuation: return punctuation
         case .whitespace: return foreground
+        // XML reuses the JSON palette rather than inventing colours: element
+        // names read like keys, attribute names like literals, and a comment
+        // is the one thing meant to recede.
+        case .tagName: return key
+        case .attributeName: return literal
+        case .text: return foreground
+        case .comment: return secondaryForeground
         }
     }
 }

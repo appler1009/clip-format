@@ -9,6 +9,9 @@ workflow refuses to build a tag that disagrees with it.
 - JSONC. `.jsonc` files, and any `.json` that tooling has written loosely —
   `tsconfig.json`, VS Code settings — are read instead of refused: `//` and
   `/* … */` comments, and a comma before the closing brace or bracket.
+- XML. Elements are indented, attributes keep their source order, and comments,
+  the declaration and namespace declarations all survive. `.xml` files preview
+  in Finder, and XML on the clipboard is recognised the same way JSON is.
 - The torn-off window can go full screen; the green button offered only zoom
   before. Its remembered frame is unaffected by the transition.
 

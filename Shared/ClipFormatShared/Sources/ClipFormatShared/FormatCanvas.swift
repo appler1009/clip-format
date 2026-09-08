@@ -3,7 +3,7 @@ import Foundation
 /// The single entry point both hosts use. The menu-bar popover and the Quick
 /// Look extension call these functions and nothing else, so a change to
 /// formatting or colour lands in both at once.
-public enum JSONCanvas {
+public enum FormatCanvas {
     /// Formatted output beyond this many characters is cut off with a notice.
     /// That is already thousands of screens of JSON; rendering more only costs
     /// the popover and Quick Look their responsiveness.
@@ -14,18 +14,44 @@ public enum JSONCanvas {
 
     // MARK: - Model
 
-    public static func model(from text: String, indent: Int = 2) -> PrettyJSONDocument {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    public static func model(from text: String, indent: Int = 2) -> FormattedDocument {
+        // A byte order mark is not whitespace to `trimmingCharacters`, so it
+        // would survive and sit in front of the first `{` or `<` — where every
+        // shape check in this function looks. Editors on Windows write one
+        // routinely, and the loop covers the rarer case of one that is not the
+        // very first scalar.
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmed.hasPrefix("\u{FEFF}") {
+            trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         guard !trimmed.isEmpty else {
-            return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
+            return FormattedDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: "Clipboard is empty")
         }
         guard trimmed.utf8.count <= sourceByteLimit else {
-            return PrettyJSONDocument(source: String(trimmed.prefix(4_000)), indent: indent, value: nil,
+            return FormattedDocument(source: String(trimmed.prefix(4_000)), indent: indent, value: nil,
                                       errorTitle: "Too large",
                                       errorMessage: "Over the \(sourceByteLimit / 1_048_576) MB limit",
                                       isTruncated: true)
+        }
+
+        // An opening angle bracket means XML, and nothing that follows can be
+        // JSON, so it is decided here rather than after the JSON readings have
+        // failed. Deciding it later put the XML branch out of reach: almost
+        // every XML document contains a namespace URL, and the `//` in it made
+        // the JSONC stage claim the source and report "unexpected '<'".
+        if trimmed.hasPrefix("<") {
+            do {
+                return FormattedDocument(source: trimmed, indent: indent,
+                                         xmlNodes: try XMLReader.parse(trimmed))
+            } catch let error as XMLParseError {
+                return FormattedDocument(source: trimmed, indent: indent, xmlNodes: [],
+                                         errorTitle: "Not XML", errorMessage: error.message)
+            } catch {
+                return FormattedDocument(source: trimmed, indent: indent, xmlNodes: [],
+                                         errorTitle: "Not XML", errorMessage: error.localizedDescription)
+            }
         }
 
         // One strict JSON document is the common case, and it is tried first so
@@ -34,11 +60,11 @@ public enum JSONCanvas {
         if looksLikeJSON(trimmed) {
             do {
                 let value = try JSONParser.parse(trimmed)
-                return PrettyJSONDocument(source: trimmed, indent: indent, value: value, errorMessage: nil)
+                return FormattedDocument(source: trimmed, indent: indent, value: value, errorMessage: nil)
             } catch let error as JSONParseError {
                 documentError = error
             } catch {
-                return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
+                return FormattedDocument(source: trimmed, indent: indent, value: nil,
                                           errorMessage: error.localizedDescription)
             }
         }
@@ -46,13 +72,13 @@ public enum JSONCanvas {
         // JSON Lines, which reads as a document that fails on trailing content.
         switch lineDelimited(trimmed) {
         case .records(let records):
-            return PrettyJSONDocument(source: trimmed, indent: indent,
+            return FormattedDocument(source: trimmed, indent: indent,
                                       records: records, kind: .lineDelimited, errorMessage: nil)
         case .lineError(let lineError, let line):
             // Every line looked like JSON and one did not parse: this was meant
             // to be JSON Lines, so the offending line beats the document's
             // "trailing content" at line 2.
-            return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
+            return FormattedDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: Self.message(for: lineError, onLine: line))
         case .notLineDelimited:
             break
@@ -76,17 +102,17 @@ public enum JSONCanvas {
         do {
             let value = try JSONParser.parse(trimmed, options: .jsonc)
             if value.isContainer {
-                return PrettyJSONDocument(source: trimmed, indent: indent,
+                return FormattedDocument(source: trimmed, indent: indent,
                                           records: [value], kind: .jsonc, errorMessage: nil)
             }
         } catch let commentError as JSONParseError where isJSONCShaped {
-            return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
+            return FormattedDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: commentError.message)
         } catch {
             // Not JSON in any reading; fall through to the document's own error.
         }
 
-        return PrettyJSONDocument(source: trimmed, indent: indent, value: nil,
+        return FormattedDocument(source: trimmed, indent: indent, value: nil,
                                   errorMessage: documentError?.message ?? "Not JSON")
     }
 
@@ -156,7 +182,7 @@ public enum JSONCanvas {
     /// - Parameter byteLimit: overridable for tests; production callers take
     ///   the default.
     public static func model(contentsOf url: URL, indent: Int = 2,
-                             byteLimit: Int = sourceByteLimit) throws -> PrettyJSONDocument {
+                             byteLimit: Int = sourceByteLimit) throws -> FormattedDocument {
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         guard size > byteLimit else {
             return model(from: try Data(contentsOf: url, options: .mappedIfSafe), indent: indent)
@@ -167,16 +193,16 @@ public enum JSONCanvas {
         let head = try handle.read(upToCount: 4_000) ?? Data()
         let actual = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
         let limit = ByteCountFormatter.string(fromByteCount: Int64(byteLimit), countStyle: .file)
-        return PrettyJSONDocument(source: String(decoding: head, as: UTF8.self), indent: indent,
+        return FormattedDocument(source: String(decoding: head, as: UTF8.self), indent: indent,
                                   value: nil,
                                   errorTitle: "Too large",
                                   errorMessage: "\(actual) file, over the \(limit) preview limit",
                                   isTruncated: true)
     }
 
-    public static func model(from data: Data, indent: Int = 2) -> PrettyJSONDocument {
+    public static func model(from data: Data, indent: Int = 2) -> FormattedDocument {
         guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
-            return PrettyJSONDocument(source: "", indent: indent, value: nil,
+            return FormattedDocument(source: "", indent: indent, value: nil,
                                       errorMessage: "File is not readable text")
         }
         return model(from: text, indent: indent)
@@ -190,16 +216,16 @@ public enum JSONCanvas {
         return (first == "{" && last == "}") || (first == "[" && last == "]")
     }
 
-    static func truncate(_ tokens: [JSONToken], toCharacters limit: Int) -> [JSONToken] {
-        var kept: [JSONToken] = []
+    static func truncate(_ tokens: [SyntaxToken], toCharacters limit: Int) -> [SyntaxToken] {
+        var kept: [SyntaxToken] = []
         var count = 0
         for token in tokens {
             if count + token.text.count > limit { break }
             count += token.text.count
             kept.append(token)
         }
-        kept.append(JSONToken(kind: .whitespace, text: "\n"))
-        kept.append(JSONToken(kind: .punctuation, text: "… truncated"))
+        kept.append(SyntaxToken(kind: .whitespace, text: "\n"))
+        kept.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
         return kept
     }
 
@@ -208,7 +234,7 @@ public enum JSONCanvas {
     /// Renders a full standalone HTML document.
     /// - Parameter appearance: pass `nil` to follow the host's colour scheme via
     ///   `prefers-color-scheme`, or force one for hosts that report it directly.
-    public static func html(from document: PrettyJSONDocument,
+    public static func html(from document: FormattedDocument,
                             appearance: Appearance? = nil,
                             fontSize: CGFloat = 12) -> String {
         let body: String
@@ -277,6 +303,8 @@ public enum JSONCanvas {
         .n { color: var(--number); }
         .l { color: var(--literal); }
         .p { color: var(--punctuation); }
+        .c { color: var(--fg2); font-style: italic; }
+        .t { color: var(--fg); }
         .notice {
           display: flex; align-items: center; gap: 8px;
           font: 12px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -313,13 +341,15 @@ public enum JSONCanvas {
         """ + "\n" + base
     }
 
-    static func cssClass(for kind: JSONToken.Kind) -> String {
+    static func cssClass(for kind: SyntaxToken.Kind) -> String {
         switch kind {
-        case .key: return "k"
+        case .key, .tagName: return "k"
         case .string: return "s"
         case .number: return "n"
-        case .bool, .null: return "l"
+        case .bool, .null, .attributeName: return "l"
         case .punctuation: return "p"
+        case .comment: return "c"
+        case .text: return "t"
         case .whitespace: return ""
         }
     }

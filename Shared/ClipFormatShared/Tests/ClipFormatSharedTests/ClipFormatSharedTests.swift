@@ -72,39 +72,39 @@ final class PrettyPrinterTests: XCTestCase {
     }
 }
 
-final class JSONCanvasTests: XCTestCase {
+final class FormatCanvasTests: XCTestCase {
     func testValidClipboardModel() {
-        let document = JSONCanvas.model(from: "  {\"a\":1}  ")
+        let document = FormatCanvas.model(from: "  {\"a\":1}  ")
         XCTAssertTrue(document.isValid)
         XCTAssertEqual(document.prettyText, "{\n  \"a\": 1\n}")
         XCTAssertEqual(document.minifiedText, #"{"a":1}"#)
     }
 
     func testNonJSONAndEmptyStates() {
-        let text = JSONCanvas.model(from: "hello world")
+        let text = FormatCanvas.model(from: "hello world")
         XCTAssertFalse(text.isValid)
         XCTAssertEqual(text.errorMessage, "Not JSON")
 
-        let empty = JSONCanvas.model(from: "   \n ")
+        let empty = FormatCanvas.model(from: "   \n ")
         XCTAssertFalse(empty.isValid)
         XCTAssertEqual(empty.errorMessage, "Clipboard is empty")
 
         // A bare literal is valid JSON but is not what "I copied some JSON" means.
-        XCTAssertFalse(JSONCanvas.model(from: "42").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "42").isValid)
     }
 
     func testInvalidJSONReportsParsePosition() {
         // Not a trailing comma any more: that is valid JSONC now, and this
         // test is about the position in the message, not about which shapes
         // are accepted.
-        let document = JSONCanvas.model(from: #"{"a": }"#)
+        let document = FormatCanvas.model(from: #"{"a": }"#)
         XCTAssertFalse(document.isValid)
         XCTAssertTrue(document.errorMessage?.contains("line 1") == true)
     }
 
     func testHTMLEscapesAndColorsTokens() {
-        let document = JSONCanvas.model(from: #"{"<k>":"a & b"}"#)
-        let html = JSONCanvas.html(from: document, appearance: .dark)
+        let document = FormatCanvas.model(from: #"{"<k>":"a & b"}"#)
+        let html = FormatCanvas.html(from: document, appearance: .dark)
         XCTAssertTrue(html.contains("&lt;k&gt;"))
         XCTAssertTrue(html.contains("a &amp; b"))
         XCTAssertTrue(html.contains("class=\"k\""))
@@ -113,27 +113,138 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testHTMLAutoAppearanceShipsBothPalettes() {
-        let html = JSONCanvas.html(from: JSONCanvas.model(from: "{}"), appearance: nil)
+        let html = FormatCanvas.html(from: FormatCanvas.model(from: "{}"), appearance: nil)
         XCTAssertTrue(html.contains("prefers-color-scheme: dark"))
         XCTAssertTrue(html.contains(Theme.light.key.hexString))
         XCTAssertTrue(html.contains(Theme.dark.key.hexString))
     }
 
     func testInvalidHTMLShowsExcerpt() {
-        let html = JSONCanvas.html(from: JSONCanvas.model(from: "not json <x>"), appearance: .light)
+        let html = FormatCanvas.html(from: FormatCanvas.model(from: "not json <x>"), appearance: .light)
         XCTAssertTrue(html.contains("Not JSON"))
         XCTAssertTrue(html.contains("not json &lt;x&gt;"))
     }
 
     func testDataModelFromUTF8File() {
         let data = Data(#"{"emoji":"😀"}"#.utf8)
-        XCTAssertEqual(JSONCanvas.model(from: data).minifiedText, #"{"emoji":"😀"}"#)
+        XCTAssertEqual(FormatCanvas.model(from: data).minifiedText, #"{"emoji":"😀"}"#)
+    }
+
+    // MARK: - XML
+
+    func testFormatsXMLWithAttributesInSourceOrder() {
+        let document = FormatCanvas.model(from: "<root zeta=\"1\" alpha=\"2\"><child id=\"x\">hi</child></root>")
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .xml)
+        // zeta before alpha: XMLDocument keeps source order where the SAX
+        // parser's attribute dictionary would not.
+        XCTAssertEqual(document.prettyText, """
+        <root zeta="1" alpha="2">
+          <child id="x">hi</child>
+        </root>
+        """)
+    }
+
+    func testTextOnlyElementStaysOnOneLine() {
+        let document = FormatCanvas.model(from: "<a><title>Hi</title></a>")
+        XCTAssertEqual(document.prettyText, "<a>\n  <title>Hi</title>\n</a>")
+    }
+
+    func testEmptyElementCollapses() {
+        XCTAssertEqual(FormatCanvas.model(from: "<a><b></b></a>").prettyText, "<a>\n  <b/>\n</a>")
+    }
+
+    func testKeepsCommentsAndProcessingInstructions() {
+        let document = FormatCanvas.model(from: "<?xml version=\"1.0\"?>\n<!-- note -->\n<a/>")
+        XCTAssertEqual(document.kind, .xml)
+        let rendered = document.prettyText ?? ""
+        XCTAssertTrue(rendered.contains("<?xml version=\"1.0\"?>"))
+        XCTAssertTrue(rendered.contains("<!-- note -->"))
+    }
+
+    func testXMLMinifiesWithoutInterElementWhitespace() {
+        let document = FormatCanvas.model(from: """
+        <root>
+          <a>1</a>
+          <b/>
+        </root>
+        """)
+        XCTAssertEqual(document.minifiedText, "<root><a>1</a><b/></root>")
+    }
+
+    func testEscapesSurviveARoundTrip() {
+        let document = FormatCanvas.model(from: "<a>fish &amp; chips &lt;yes&gt;</a>")
+        XCTAssertEqual(document.prettyText, "<a>fish &amp; chips &lt;yes&gt;</a>")
+    }
+
+    func testNamespaceDeclarationsSurvive() {
+        // XMLDocument keeps these out of `attributes`, so reading only that
+        // silently drops xmlns and changes what the document means.
+        let document = FormatCanvas.model(from: "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:dc=\"http://purl.org/dc\"><a/></feed>")
+        let rendered = document.prettyText ?? ""
+        XCTAssertTrue(rendered.contains("xmlns=\"http://www.w3.org/2005/Atom\""))
+        XCTAssertTrue(rendered.contains("xmlns:dc=\"http://purl.org/dc\""))
+    }
+
+    func testByteOrderMarkDoesNotHideTheFormat() {
+        // A BOM is not whitespace to `trimmingCharacters`, so it used to sit in
+        // front of the first character every shape check looks at — the same
+        // way a namespace URL used to send XML down the JSON path.
+        let xml = FormatCanvas.model(from: "\u{FEFF}<feed xmlns=\"http://www.w3.org/2005/Atom\"><a/></feed>")
+        XCTAssertEqual(xml.kind, .xml)
+        XCTAssertTrue(xml.isValid)
+
+        let json = FormatCanvas.model(from: "\u{FEFF}{\"a\":1}")
+        XCTAssertEqual(json.kind, .json)
+        XCTAssertTrue(json.isValid)
+
+        // And one that is not the very first scalar.
+        let indented = FormatCanvas.model(from: "\n\u{FEFF}<a/>")
+        XCTAssertEqual(indented.kind, .xml)
+        XCTAssertTrue(indented.isValid)
+    }
+
+    func testFailedXMLStillReportsItselfAsXML() {
+        // So a host can say "isn't valid XML" without matching on the wording
+        // of the error.
+        let document = FormatCanvas.model(from: "<a><b></a>")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.kind, .xml)
+    }
+
+    func testXMLWithANamespaceURLIsStillXML() {
+        // Regression: the `//` in a namespace URL made the JSONC stage claim
+        // this source and report "Unexpected character '<'", so the XML branch
+        // below it was unreachable for nearly every real document.
+        let document = FormatCanvas.model(from: "<feed xmlns=\"http://www.w3.org/2005/Atom\"><a/></feed>")
+        XCTAssertTrue(document.isValid)
+        XCTAssertEqual(document.kind, .xml)
+    }
+
+    func testMalformedXMLReportsAnXMLError() {
+        let document = FormatCanvas.model(from: "<a><b></a>")
+        XCTAssertFalse(document.isValid)
+        XCTAssertEqual(document.errorTitle, "Not XML")
+        XCTAssertNotNil(document.errorMessage)
+    }
+
+    func testTextThatIsNeitherJSONNorXMLIsStillNotJSON() {
+        let document = FormatCanvas.model(from: "hello world")
+        XCTAssertEqual(document.errorTitle, "Not JSON")
+        XCTAssertEqual(document.errorMessage, "Not JSON")
+    }
+
+    func testXMLTokensCarryTagAndAttributeKinds() {
+        let document = FormatCanvas.model(from: "<a href=\"x\">t</a>")
+        XCTAssertTrue(document.tokens.contains { $0.kind == .tagName && $0.text == "a" })
+        XCTAssertTrue(document.tokens.contains { $0.kind == .attributeName && $0.text == "href" })
+        XCTAssertTrue(document.tokens.contains { $0.kind == .text && $0.text == "t" })
     }
 
     // MARK: - JSON with comments
 
     func testParsesLineComments() {
-        let document = JSONCanvas.model(from: """
+        let document = FormatCanvas.model(from: """
         {
           // the port the dev server listens on
           "port": 3000, // trailing note
@@ -146,13 +257,13 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testParsesBlockComments() {
-        let document = JSONCanvas.model(from: "/* header */ {\"a\": /* inline */ 1}")
+        let document = FormatCanvas.model(from: "/* header */ {\"a\": /* inline */ 1}")
         XCTAssertEqual(document.kind, .jsonc)
         XCTAssertEqual(document.minifiedText, #"{"a":1}"#)
     }
 
     func testCommentMarkersInsideStringsAreJustText() {
-        let document = JSONCanvas.model(from: #"{"url":"https://example.com//path","note":"/* not a comment */"}"#)
+        let document = FormatCanvas.model(from: #"{"url":"https://example.com//path","note":"/* not a comment */"}"#)
         // Strict JSON already, so no comment handling is involved at all.
         XCTAssertEqual(document.kind, .json)
         XCTAssertEqual(document.value, .object([
@@ -162,32 +273,32 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testStrictJSONIsNeverReportedAsCommented() {
-        XCTAssertEqual(JSONCanvas.model(from: #"{"a":1}"#).kind, .json)
+        XCTAssertEqual(FormatCanvas.model(from: #"{"a":1}"#).kind, .json)
     }
 
     func testCommentedBareLiteralIsStillNotJSON() {
         // The object-or-array rule holds across all three kinds.
-        XCTAssertFalse(JSONCanvas.model(from: "// note\n42").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "// note\n42").isValid)
     }
 
     func testUnterminatedBlockCommentAfterACompleteValueIsAnError() {
         // The value is complete, so nothing else fails: only the unclosed
         // comment makes this invalid. Consuming it as trivia would call this
         // document valid.
-        let document = JSONCanvas.model(from: "{\"a\":1}/* never closed")
+        let document = FormatCanvas.model(from: "{\"a\":1}/* never closed")
         XCTAssertFalse(document.isValid)
         XCTAssertEqual(document.errorMessage?.contains("Unterminated block comment"), true)
     }
 
     func testUnterminatedBlockCommentInsideAValueIsAnError() {
-        let document = JSONCanvas.model(from: "{\"a\": 1 /* never closed")
+        let document = FormatCanvas.model(from: "{\"a\": 1 /* never closed")
         XCTAssertFalse(document.isValid)
         XCTAssertNotNil(document.errorMessage)
     }
 
     func testTsconfigShapedFileWithCommentsAndTrailingComma() {
         // The case this whole path exists for: both leniencies at once.
-        let document = JSONCanvas.model(from: """
+        let document = FormatCanvas.model(from: """
         {
           // options
           "target": "ES2022",
@@ -200,7 +311,7 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testTrailingCommasWithoutComments() {
-        let document = JSONCanvas.model(from: #"{"a":[1,2,],}"#)
+        let document = FormatCanvas.model(from: #"{"a":[1,2,],}"#)
         XCTAssertTrue(document.isValid)
         XCTAssertEqual(document.kind, .jsonc)
         XCTAssertEqual(document.minifiedText, #"{"a":[1,2]}"#)
@@ -217,7 +328,7 @@ final class JSONCanvasTests: XCTestCase {
     func testCommentBetweenTheCommaAndTheBrace() {
         // The shape VS Code writes: the comma is not the last thing before the
         // brace, a comment is. Locks the skip between the two.
-        let object = JSONCanvas.model(from: """
+        let object = FormatCanvas.model(from: """
         {
           "strict": true, // always
         }
@@ -225,7 +336,7 @@ final class JSONCanvasTests: XCTestCase {
         XCTAssertTrue(object.isValid)
         XCTAssertEqual(object.minifiedText, #"{"strict":true}"#)
 
-        let array = JSONCanvas.model(from: "[\n  1, /* and that is all */\n]")
+        let array = FormatCanvas.model(from: "[\n  1, /* and that is all */\n]")
         XCTAssertTrue(array.isValid)
         XCTAssertEqual(array.minifiedText, "[1]")
     }
@@ -234,22 +345,22 @@ final class JSONCanvasTests: XCTestCase {
         // Documented, not accidental: JSON Lines is one *valid JSON* value per
         // line, so a trailing comma in a record is a bad record — and the error
         // names the line rather than being softened into JSONC.
-        let document = JSONCanvas.model(from: "{\"a\":1,}\n{\"b\":2}")
+        let document = FormatCanvas.model(from: "{\"a\":1,}\n{\"b\":2}")
         XCTAssertFalse(document.isValid)
         XCTAssertEqual(document.errorMessage?.contains("line 1"), true)
     }
 
     func testALoneCommaIsStillAnError() {
         // Leniency is about a comma *after* a value, not commas anywhere.
-        XCTAssertFalse(JSONCanvas.model(from: "{,}").isValid)
-        XCTAssertFalse(JSONCanvas.model(from: "[,]").isValid)
-        XCTAssertFalse(JSONCanvas.model(from: #"{"a":1,,}"#).isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "{,}").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "[,]").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: #"{"a":1,,}"#).isValid)
     }
 
     func testJSONCErrorStillNamesTheRealProblem() {
         // Comments plus something genuinely wrong: the error should not point
         // at the comment that the strict parser tripped over first.
-        let document = JSONCanvas.model(from: """
+        let document = FormatCanvas.model(from: """
         {
           // options
           "target": ES2022
@@ -261,7 +372,7 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testCommentedDocumentHasASingleValue() {
-        let document = JSONCanvas.model(from: "// note\n{\"a\":1}")
+        let document = FormatCanvas.model(from: "// note\n{\"a\":1}")
         XCTAssertEqual(document.kind, .jsonc)
         // One document, one value — the nil is reserved for JSON Lines.
         XCTAssertEqual(document.value, .object([(key: "a", value: .number("1"))]))
@@ -270,7 +381,7 @@ final class JSONCanvasTests: XCTestCase {
     func testCommentsDoNotSurviveFormatting() {
         // Formatting is driven by the parsed value, so comments are dropped.
         // Documented behaviour, asserted so that it stays deliberate.
-        let document = JSONCanvas.model(from: "{\n  // note\n  \"a\": 1\n}")
+        let document = FormatCanvas.model(from: "{\n  // note\n  \"a\": 1\n}")
         XCTAssertEqual(document.kind, .jsonc)
         XCTAssertEqual(document.prettyText?.contains("note"), false)
     }
@@ -278,7 +389,7 @@ final class JSONCanvasTests: XCTestCase {
     // MARK: - JSON Lines
 
     func testParsesJSONLines() {
-        let document = JSONCanvas.model(from: #"{"a":1}\n{"a":2}\n{"a":3}"#.replacingOccurrences(of: "\\n", with: "\n"))
+        let document = FormatCanvas.model(from: #"{"a":1}\n{"a":2}\n{"a":3}"#.replacingOccurrences(of: "\\n", with: "\n"))
         XCTAssertTrue(document.isValid)
         XCTAssertEqual(document.kind, .lineDelimited)
         XCTAssertEqual(document.recordCount, 3)
@@ -288,7 +399,7 @@ final class JSONCanvasTests: XCTestCase {
 
     func testJSONLinesRoundTripsThroughCopyMinified() {
         let source = "{\"a\":1}\n{\"b\":[2,3]}"
-        let document = JSONCanvas.model(from: source)
+        let document = FormatCanvas.model(from: source)
         XCTAssertEqual(document.minifiedText, source)
         // Pretty puts a blank line between records so they stay apart once
         // each is expanded.
@@ -296,19 +407,19 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testBlankLinesBetweenRecordsAreIgnored() {
-        let document = JSONCanvas.model(from: "{\"a\":1}\n\n\n{\"a\":2}\n")
+        let document = FormatCanvas.model(from: "{\"a\":1}\n\n\n{\"a\":2}\n")
         XCTAssertEqual(document.recordCount, 2)
     }
 
     func testSingleDocumentIsNotTreatedAsLines() {
-        let document = JSONCanvas.model(from: "{\n  \"a\": 1\n}")
+        let document = FormatCanvas.model(from: "{\n  \"a\": 1\n}")
         XCTAssertEqual(document.kind, .json)
         XCTAssertEqual(document.recordCount, 1)
         XCTAssertNotNil(document.value)
     }
 
     func testOneBadLineReportsThatLineNotTheDocument() {
-        let document = JSONCanvas.model(from: "{\"a\":1}\n{\"a\":}\n{\"a\":3}")
+        let document = FormatCanvas.model(from: "{\"a\":1}\n{\"a\":}\n{\"a\":3}")
         XCTAssertFalse(document.isValid)
         // The document parse fails at line 2 with "trailing content", which
         // says nothing about the record that is actually wrong.
@@ -319,7 +430,7 @@ final class JSONCanvasTests: XCTestCase {
     func testMixedRecordKindsAreStillJSONLines() {
         // First char `{`, last char `]`: the whole-buffer shape check fails, so
         // this only works if the line reader is consulted anyway.
-        let document = JSONCanvas.model(from: "{\"a\":1}\n[1,2,3]")
+        let document = FormatCanvas.model(from: "{\"a\":1}\n[1,2,3]")
         XCTAssertTrue(document.isValid)
         XCTAssertEqual(document.kind, .lineDelimited)
         XCTAssertEqual(document.recordCount, 2)
@@ -329,17 +440,17 @@ final class JSONCanvasTests: XCTestCase {
         // Lines that do not each look like JSON: this was a document with a
         // typo, so the document's error is the useful one. A missing comma,
         // since a spare one is now accepted as JSONC.
-        let document = JSONCanvas.model(from: "{\n  \"a\": 1\n  \"b\": 2\n}")
+        let document = FormatCanvas.model(from: "{\n  \"a\": 1\n  \"b\": 2\n}")
         XCTAssertFalse(document.isValid)
         XCTAssertEqual(document.errorMessage?.contains("line 3"), true)
     }
 
     func testBareLiteralLinesAreNotJSONLines() {
-        XCTAssertFalse(JSONCanvas.model(from: "42\n43\n44").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "42\n43\n44").isValid)
     }
 
     func testJSONLinesTokensCarryEveryRecord() {
-        let document = JSONCanvas.model(from: "{\"a\":1}\n{\"a\":2}")
+        let document = FormatCanvas.model(from: "{\"a\":1}\n{\"a\":2}")
         let rendered = document.tokens.map(\.text).joined()
         XCTAssertTrue(rendered.contains("\"a\": 1"))
         XCTAssertTrue(rendered.contains("\"a\": 2"))
@@ -355,7 +466,7 @@ final class JSONCanvasTests: XCTestCase {
         try Data(("[" + entries + "]").utf8).write(to: url)
         XCTAssertGreaterThan(try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0, 8 * 1024 * 1024)
 
-        let document = try JSONCanvas.model(contentsOf: url)
+        let document = try FormatCanvas.model(contentsOf: url)
         XCTAssertTrue(document.isValid)
         XCTAssertNil(document.errorMessage)
     }
@@ -366,38 +477,38 @@ final class JSONCanvasTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         try Data(#"{"a":1,"b":2}"#.utf8).write(to: url)
 
-        let document = try JSONCanvas.model(contentsOf: url, byteLimit: 4)
+        let document = try FormatCanvas.model(contentsOf: url, byteLimit: 4)
         XCTAssertFalse(document.isValid)
         XCTAssertEqual(document.errorTitle, "Too large")
         XCTAssertTrue(document.errorMessage?.contains("limit") == true)
         // The badge must not blame the file for being malformed.
-        let html = JSONCanvas.html(from: document, appearance: .light)
+        let html = FormatCanvas.html(from: document, appearance: .light)
         XCTAssertTrue(html.contains(">Too large<"))
         XCTAssertFalse(html.contains(">Not JSON<"))
     }
 
     func testTruncationAppendsNotice() {
         let tokens = PrettyPrinter.tokens(for: .array(Array(repeating: .number("1"), count: 200)), indent: 2)
-        let truncated = JSONCanvas.truncate(tokens, toCharacters: 40)
+        let truncated = FormatCanvas.truncate(tokens, toCharacters: 40)
         XCTAssertTrue(truncated.map(\.text).joined().hasSuffix("… truncated"))
         XCTAssertLessThan(truncated.count, tokens.count)
     }
 
     func testOversizedDocumentTruncatesFormattedOutput() {
         let big = "[" + Array(repeating: "\"0123456789\"", count: 60_000).joined(separator: ",") + "]"
-        let document = JSONCanvas.model(from: big)
+        let document = FormatCanvas.model(from: big)
         XCTAssertTrue(document.isValid)
         XCTAssertTrue(document.isTruncated)
         let rendered = document.tokens.map(\.text).joined()
-        XCTAssertLessThan(rendered.count, JSONCanvas.renderCharacterLimit + 100)
+        XCTAssertLessThan(rendered.count, FormatCanvas.renderCharacterLimit + 100)
         XCTAssertTrue(rendered.hasSuffix("… truncated"))
         // The full text is still available for Copy Pretty.
-        XCTAssertGreaterThan(document.prettyText?.count ?? 0, JSONCanvas.renderCharacterLimit)
+        XCTAssertGreaterThan(document.prettyText?.count ?? 0, FormatCanvas.renderCharacterLimit)
     }
 
     func testHTMLUsesRequestedFontSizeAndTabSize() {
-        let document = JSONCanvas.model(from: #"{"a":1}"#, indent: 4)
-        let html = JSONCanvas.html(from: document, appearance: .light, fontSize: 18)
+        let document = FormatCanvas.model(from: #"{"a":1}"#, indent: 4)
+        let html = FormatCanvas.html(from: document, appearance: .light, fontSize: 18)
         XCTAssertTrue(html.contains("font: 18.0px/1.55"))
         XCTAssertTrue(html.contains("tab-size: 4"))
     }
@@ -413,7 +524,7 @@ final class JSONCanvasTests: XCTestCase {
     }
 
     func testHTMLKeepsOneSpanPerColouredRun() {
-        let html = JSONCanvas.html(from: JSONCanvas.model(from: #"{"a":"b"}"#), appearance: .light)
+        let html = FormatCanvas.html(from: FormatCanvas.model(from: #"{"a":"b"}"#), appearance: .light)
         // Key, ':' and value each get one span; whitespace and newlines stay bare.
         XCTAssertTrue(html.contains(#"<span class="k">&quot;a&quot;</span><span class="p">:</span> <span class="s">&quot;b&quot;</span>"#))
         XCTAssertEqual(html.components(separatedBy: "<span").count - 1, 5)
@@ -421,6 +532,6 @@ final class JSONCanvasTests: XCTestCase {
 
     func testDeepNestingIsRejectedNotCrashed() {
         let deep = String(repeating: "[", count: 5_000) + String(repeating: "]", count: 5_000)
-        XCTAssertFalse(JSONCanvas.model(from: deep).isValid)
+        XCTAssertFalse(FormatCanvas.model(from: deep).isValid)
     }
 }

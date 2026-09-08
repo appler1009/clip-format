@@ -3,7 +3,7 @@ import Foundation
 /// One classified run of characters in formatted output. Both renderers (HTML
 /// for Quick Look, `AttributedString` for the popover) consume this same stream,
 /// which is what keeps the two hosts visually identical.
-public struct JSONToken: Equatable, Sendable {
+public struct SyntaxToken: Equatable, Sendable {
     public enum Kind: String, Equatable, Sendable {
         case punctuation
         case key
@@ -12,6 +12,13 @@ public struct JSONToken: Equatable, Sendable {
         case bool
         case null
         case whitespace
+        // XML. Element and attribute names sit where object keys do, but text
+        // content and comments have no JSON equivalent and need their own
+        // colours.
+        case tagName
+        case attributeName
+        case text
+        case comment
     }
 
     public let kind: Kind
@@ -25,8 +32,8 @@ public struct JSONToken: Equatable, Sendable {
 
 public enum PrettyPrinter {
     /// Formats `value` as an indented token stream.
-    public static func tokens(for value: JSONValue, indent: Int) -> [JSONToken] {
-        var tokens: [JSONToken] = []
+    public static func tokens(for value: JSONValue, indent: Int) -> [SyntaxToken] {
+        var tokens: [SyntaxToken] = []
         emit(value, indent: indent, level: 0, into: &tokens)
         return tokens
     }
@@ -43,50 +50,50 @@ public enum PrettyPrinter {
         return out
     }
 
-    private static func emit(_ value: JSONValue, indent: Int, level: Int, into tokens: inout [JSONToken]) {
+    private static func emit(_ value: JSONValue, indent: Int, level: Int, into tokens: inout [SyntaxToken]) {
         switch value {
         case .null:
-            tokens.append(JSONToken(kind: .null, text: "null"))
+            tokens.append(SyntaxToken(kind: .null, text: "null"))
         case .bool(let flag):
-            tokens.append(JSONToken(kind: .bool, text: flag ? "true" : "false"))
+            tokens.append(SyntaxToken(kind: .bool, text: flag ? "true" : "false"))
         case .number(let literal):
-            tokens.append(JSONToken(kind: .number, text: literal))
+            tokens.append(SyntaxToken(kind: .number, text: literal))
         case .string(let text):
-            tokens.append(JSONToken(kind: .string, text: quote(text)))
+            tokens.append(SyntaxToken(kind: .string, text: quote(text)))
         case .array(let elements):
             guard !elements.isEmpty else {
-                tokens.append(JSONToken(kind: .punctuation, text: "[]"))
+                tokens.append(SyntaxToken(kind: .punctuation, text: "[]"))
                 return
             }
-            tokens.append(JSONToken(kind: .punctuation, text: "["))
+            tokens.append(SyntaxToken(kind: .punctuation, text: "["))
             for (offset, element) in elements.enumerated() {
-                if offset > 0 { tokens.append(JSONToken(kind: .punctuation, text: ",")) }
+                if offset > 0 { tokens.append(SyntaxToken(kind: .punctuation, text: ",")) }
                 newline(indent: indent, level: level + 1, into: &tokens)
                 emit(element, indent: indent, level: level + 1, into: &tokens)
             }
             newline(indent: indent, level: level, into: &tokens)
-            tokens.append(JSONToken(kind: .punctuation, text: "]"))
+            tokens.append(SyntaxToken(kind: .punctuation, text: "]"))
         case .object(let members):
             guard !members.isEmpty else {
-                tokens.append(JSONToken(kind: .punctuation, text: "{}"))
+                tokens.append(SyntaxToken(kind: .punctuation, text: "{}"))
                 return
             }
-            tokens.append(JSONToken(kind: .punctuation, text: "{"))
+            tokens.append(SyntaxToken(kind: .punctuation, text: "{"))
             for (offset, member) in members.enumerated() {
-                if offset > 0 { tokens.append(JSONToken(kind: .punctuation, text: ",")) }
+                if offset > 0 { tokens.append(SyntaxToken(kind: .punctuation, text: ",")) }
                 newline(indent: indent, level: level + 1, into: &tokens)
-                tokens.append(JSONToken(kind: .key, text: quote(member.key)))
-                tokens.append(JSONToken(kind: .punctuation, text: ":"))
-                tokens.append(JSONToken(kind: .whitespace, text: " "))
+                tokens.append(SyntaxToken(kind: .key, text: quote(member.key)))
+                tokens.append(SyntaxToken(kind: .punctuation, text: ":"))
+                tokens.append(SyntaxToken(kind: .whitespace, text: " "))
                 emit(member.value, indent: indent, level: level + 1, into: &tokens)
             }
             newline(indent: indent, level: level, into: &tokens)
-            tokens.append(JSONToken(kind: .punctuation, text: "}"))
+            tokens.append(SyntaxToken(kind: .punctuation, text: "}"))
         }
     }
 
-    private static func newline(indent: Int, level: Int, into tokens: inout [JSONToken]) {
-        tokens.append(JSONToken(kind: .whitespace, text: "\n" + String(repeating: " ", count: indent * level)))
+    private static func newline(indent: Int, level: Int, into tokens: inout [SyntaxToken]) {
+        tokens.append(SyntaxToken(kind: .whitespace, text: "\n" + String(repeating: " ", count: indent * level)))
     }
 
     private static func emitMinified(_ value: JSONValue, into out: inout String) {
