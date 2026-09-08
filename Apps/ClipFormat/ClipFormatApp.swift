@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferencesWindow = PreferencesWindowController()
     /// Non-nil once the user has dragged the popover off the status item.
     private var detachedWindow: DetachedJSONWindow?
+    /// Set when a tear-off spends the current popover; see the detach handler.
+    private var popoverIsSpent = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
@@ -161,9 +163,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentSize = NSSize(width: 520, height: 420)
     }
 
-    /// The popover and the torn-off window are the same view on the same
-    /// monitor, so bringing the window forward is the honest answer to a click
-    /// on the status item once one exists.
+    /// One source, two hosts: the window shows its own controller over the
+    /// same monitor, so a click on the status item while it is open should
+    /// bring it forward rather than open a second copy of the same thing.
     private func focusDetachedWindow(_ window: DetachedJSONWindow) {
         monitor.refresh(force: true)
         NSApp.activate(ignoringOtherApps: true)
@@ -181,10 +183,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let button = statusItem.button else { return }
         monitor.refresh(force: true)
-        // Fresh content every time: after a tear-off the previous view belongs
-        // to the window, and a popover shown with a view that has moved
-        // elsewhere comes up blank.
-        configurePopover()
+        // Only a popover that has been torn off needs replacing; before that
+        // the same instance shows content perfectly well, and rebuilding the
+        // hosting tree on every click would be waste.
+        if popoverIsSpent {
+            popover = NSPopover()
+            configurePopover()
+            popoverIsSpent = false
+        }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
         installDismissMonitor()
@@ -284,9 +290,13 @@ extension AppDelegate: NSPopoverDelegate {
         // arrives without its sizing and renders blank, so the window gets its
         // own controller on the same monitor instead.
         window.contentViewController = makeContentController()
-        // The view states a minimum but no fixed size, so without this the
-        // window opens at 380x220 and clips the JSON.
-        window.setContentSize(NSSize(width: 520, height: 420))
+        // A window the user has sized before comes back the way they left it.
+        // Only a first-ever tear-off needs a size stated, because the view
+        // carries a minimum but no fixed size and would otherwise open at
+        // 380x220 and clip the JSON. AppKit places it under the drag.
+        if !window.setFrameUsingName(DetachedJSONWindow.frameName) {
+            window.setContentSize(NSSize(width: 520, height: 420))
+        }
         window.delegate = self
         detachedWindow = window
 
@@ -299,8 +309,10 @@ extension AppDelegate: NSPopoverDelegate {
         // the next click gets a new one.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.popover = NSPopover()
-            self.configurePopover()
+            // A detached NSPopover cannot be reused: it opens blank from here
+            // on, even given a new content controller, so the next open builds
+            // a new one.
+            self.popoverIsSpent = true
             // The global click monitor exists to close a transient popover; a
             // window is not transient, and leaving it installed would swallow
             // the first click in every other app.
@@ -313,7 +325,10 @@ extension AppDelegate: NSPopoverDelegate {
 
 extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        guard (notification.object as? NSWindow) === detachedWindow else { return }
+        guard let window = notification.object as? DetachedJSONWindow, window === detachedWindow else { return }
+        // Saved here rather than by autosave, so that the size the user chose
+        // survives while the tear-off gesture still owns first placement.
+        window.saveFrame(usingName: DetachedJSONWindow.frameName)
         detachedWindow = nil
         // Nothing is watching for ⌘+ / ⌘− any more until a surface reopens.
         if let keyMonitor, !popover.isShown {
