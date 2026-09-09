@@ -100,11 +100,66 @@ fi
 echo "==> Packaging"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
+echo "==> Rendering DMG background"
+swift Scripts/make-dmg-background.swift Packaging/dmg-background.png
+
+# Window and icon positions are in points and must match
+# Scripts/make-dmg-background.swift (640×400 content, icons at 160 and 480).
+# Width is exactly the art width so Finder never shows its default white strip
+# at the sides; height adds ~28pt for the title bar.
+DMG_VOL="ClipFormat"
+DMG_CONTENT_W=640
+DMG_CONTENT_H=400
+DMG_TITLE_H=28
+DMG_WIN="{400, 100, $((400 + DMG_CONTENT_W)), $((100 + DMG_CONTENT_H + DMG_TITLE_H))}"
+# Finder's icon position is from the top of the window; the background
+# script draws from the bottom, so 400 - 188 = 212.
+DMG_APP_POS="{160, 212}"
+DMG_APPS_POS="{480, 212}"
+
 STAGING=$(mktemp -d)
 cp -R "$APP" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
-hdiutil create -volname "ClipFormat" -srcfolder "$STAGING" -ov -format UDZO -quiet "$DMG"
+mkdir "$STAGING/.background"
+cp Packaging/dmg-background.png "$STAGING/.background/background.png"
+
+RW="$DIST/rw.dmg"
+rm -f "$RW" "$DMG"
+hdiutil create -volname "$DMG_VOL" -srcfolder "$STAGING" -ov -format UDRW -fs HFS+ -size 150m -quiet "$RW"
 rm -rf "$STAGING"
+
+MOUNT=$(hdiutil attach -readwrite -noverify -noautoopen "$RW" | sed -n 's/.*\(\/Volumes\/.*\)/\1/p' | head -1)
+echo "==> Styling $MOUNT"
+# Finder reads the background from a file on the volume; the folder stays
+# hidden so the user only sees the app and Applications.
+osascript <<EOF
+tell application "Finder"
+  tell disk "$DMG_VOL"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set bounds of container window to $DMG_WIN
+    set theViewOptions to the icon view options of container window
+    set arrangement of theViewOptions to not arranged
+    set icon size of theViewOptions to 128
+    set background color of theViewOptions to {65535, 65535, 65535}
+    set background picture of theViewOptions to file ".background:background.png"
+    set position of item "ClipFormat.app" to $DMG_APP_POS
+    set position of item "Applications" to $DMG_APPS_POS
+    update without registering applications
+    delay 2
+    close
+    open
+    delay 1
+    close
+  end tell
+end tell
+EOF
+sync
+hdiutil detach "$MOUNT" -quiet
+hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -ov -quiet -o "$DMG"
+rm -f "$RW"
 
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
   codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
