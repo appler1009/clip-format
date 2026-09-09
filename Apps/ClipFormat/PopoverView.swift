@@ -97,36 +97,20 @@ struct PopoverView: View {
 
     @ViewBuilder
     private var popoverActionBar: some View {
-        let buttons = HStack(spacing: 6) {
-            Button("Copy Pretty") { copy(document.prettyText) }
-                .disabled(!document.isValid)
-                .toolbarLikeGlass()
-            Button("Copy Minified") { copy(document.minifiedText) }
-                .disabled(!document.isValid)
-                .toolbarLikeGlass()
-            Button("A−") { preferences.decreaseFontSize() }
-                .disabled(preferences.fontSize <= Preferences.minFontSize)
-                .help("Smaller text (⌘−)")
-                .toolbarLikeGlass()
-            Button("A+") { preferences.increaseFontSize() }
-                .disabled(preferences.fontSize >= Preferences.maxFontSize)
-                .help("Larger text (⌘+)")
-                .toolbarLikeGlass()
-            Button {
-                openPreferences()
-            } label: {
-                Image(systemName: "gearshape")
-            }
-            .help("Preferences")
-            .toolbarLikeGlass()
+        let buttons = HStack(spacing: 12) {
+            copyMenu.toolbarLikeGlass()
+            smallerTextButton.toolbarLikeGlass()
+            largerTextButton.toolbarLikeGlass()
+            preferencesButton.toolbarLikeGlass()
         }
-        .font(.system(size: 12))
+        .font(.system(size: 13))
+        .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
 
         if #available(macOS 26, *) {
             // One sampling pass for neighbouring glass controls — same rule as
             // the system toolbar, which would otherwise look uneven.
-            GlassEffectContainer(spacing: 6) { buttons }
+            GlassEffectContainer(spacing: 12) { buttons }
         } else {
             buttons
         }
@@ -140,7 +124,10 @@ struct PopoverView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                actionButtons
+                copyMenu
+                smallerTextButton
+                largerTextButton
+                preferencesButton
             }
         }
         // Let the system draw the toolbar glass (Liquid Glass on Tahoe) rather
@@ -148,23 +135,45 @@ struct PopoverView: View {
         .toolbarBackground(.automatic, for: .windowToolbar)
     }
 
-    /// Shared by the popover glass cluster and the window toolbar.
-    @ViewBuilder
-    private var actionButtons: some View {
-        Button("Copy Pretty") { copy(document.prettyText) }
-            .disabled(!document.isValid)
-        Button("Copy Minified") { copy(document.minifiedText) }
-            .disabled(!document.isValid)
-        Button("A−") { preferences.decreaseFontSize() }
-            .disabled(preferences.fontSize <= Preferences.minFontSize)
-            .help("Smaller text (⌘−)")
-        Button("A+") { preferences.increaseFontSize() }
-            .disabled(preferences.fontSize >= Preferences.maxFontSize)
-            .help("Larger text (⌘+)")
+    /// One Copy control; Pretty / Minified live in the menu where labels fit.
+    private var copyMenu: some View {
+        Menu {
+            Button("Pretty") { copy(document.prettyText) }
+                .disabled(!document.isValid)
+            Button("Minified") { copy(document.minifiedText) }
+                .disabled(!document.isValid)
+        } label: {
+            Label("Copy", systemImage: "doc.on.doc")
+        }
+        .help("Copy formatted clipboard")
+        .disabled(!document.isValid)
+    }
+
+    private var smallerTextButton: some View {
+        Button {
+            preferences.decreaseFontSize()
+        } label: {
+            Label("Smaller", systemImage: "textformat.size.smaller")
+        }
+        .disabled(preferences.fontSize <= Preferences.minFontSize)
+        .help("Smaller text (⌘−)")
+    }
+
+    private var largerTextButton: some View {
+        Button {
+            preferences.increaseFontSize()
+        } label: {
+            Label("Larger", systemImage: "textformat.size.larger")
+        }
+        .disabled(preferences.fontSize >= Preferences.maxFontSize)
+        .help("Larger text (⌘+)")
+    }
+
+    private var preferencesButton: some View {
         Button {
             openPreferences()
         } label: {
-            Image(systemName: "gearshape")
+            Label("Preferences", systemImage: "gearshape")
         }
         .help("Preferences")
     }
