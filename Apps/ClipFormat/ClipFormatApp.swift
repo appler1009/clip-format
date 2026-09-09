@@ -266,7 +266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "ClipFormat",
-            .init(rawValue: "Copyright"): "Revived. Formats JSON in the menu bar and in Quick Look.",
+            .init(rawValue: "Copyright"): "Revived.\nJSON in the menu bar and in Quick Look.",
         ])
     }
 
