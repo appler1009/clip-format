@@ -42,9 +42,8 @@ extension View {
     }
 }
 
-/// Where this view is hosted. The popover puts actions in a top-trailing glass
-/// cluster beside the tear-off grabber; the window lifts them into the
-/// title-bar toolbar so Tahoe can put them on Liquid Glass.
+/// Where this view is hosted. Both put actions in the same top-trailing glass
+/// cluster; only the popover adds the leading tear-off grabber.
 enum PopoverChrome {
     case popover
     case window
@@ -80,21 +79,37 @@ struct PopoverView: View {
 
     private var popoverBody: some View {
         VStack(spacing: 0) {
-            popoverTopBar
+            chromeTopBar(showsDetachHandle: true)
             formattingBanner
             documentBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
-    /// Grabber on the leading edge, actions trailing — same order as the
-    /// torn-off window's title bar. Each control gets its own glass, not a
-    /// shared enclosing group.
-    private var popoverTopBar: some View {
+    private var windowBody: some View {
+        VStack(spacing: 0) {
+            // Same action cluster as the popover — not an NSToolbar — so spacing
+            // and glass match exactly. The system title bar still owns traffic
+            // lights and window dragging.
+            chromeTopBar(showsDetachHandle: false)
+            formattingBanner
+            documentBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    /// Leading grabber only in the popover; both hosts share the trailing actions.
+    private func chromeTopBar(showsDetachHandle: Bool) -> some View {
         HStack(spacing: 12) {
-            detachHandle
+            if showsDetachHandle {
+                detachHandle
+            } else {
+                // Title is hidden and the bar is transparent, so leave room for
+                // the traffic lights instead of drawing under them.
+                Color.clear.frame(width: 68, height: 28)
+            }
             Spacer(minLength: 16)
-            popoverActionBar
+            actionBar
         }
         .padding(.horizontal, 14)
         .padding(.top, 10)
@@ -102,7 +117,7 @@ struct PopoverView: View {
     }
 
     @ViewBuilder
-    private var popoverActionBar: some View {
+    private var actionBar: some View {
         // Spacing has to live both in the HStack and in GlassEffectContainer —
         // the container's spacing is what keeps neighbouring glass shapes apart.
         let gap: CGFloat = 20
@@ -129,25 +144,6 @@ struct PopoverView: View {
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
         }
-    }
-
-    private var windowBody: some View {
-        VStack(spacing: 0) {
-            formattingBanner
-            documentBody
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                copyMenu
-                smallerTextButton
-                largerTextButton
-                preferencesButton
-            }
-        }
-        // Let the system draw the toolbar glass (Liquid Glass on Tahoe) rather
-        // than painting a material that would sit on top of it.
-        .toolbarBackground(.automatic, for: .windowToolbar)
     }
 
     /// One Copy control; Pretty / Minified live in the menu where labels fit.
