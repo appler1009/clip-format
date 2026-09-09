@@ -1,7 +1,7 @@
 import AppKit
 
-/// The menu-bar glyph: template braces, optionally badged with the clipboard's
-/// JSON state.
+/// The menu-bar glyph: template braces, optionally badged with whether the
+/// clipboard holds something this app can format.
 ///
 /// Drawing happens inside `NSImage(size:flipped:drawingHandler:)` so the braces
 /// pick up the correct label colour every time the menu bar redraws — including
@@ -30,8 +30,8 @@ enum StatusItemIcon {
 
         var accessibilityDescription: String {
             switch self {
-            case .valid: return "ClipFormat — clipboard contains JSON"
-            case .invalid: return "ClipFormat — clipboard is not JSON"
+            case .valid: return "ClipFormat — clipboard contains something ClipFormat can format"
+            case .invalid: return "ClipFormat — clipboard has nothing to format"
             case .neutral: return "ClipFormat"
             }
         }

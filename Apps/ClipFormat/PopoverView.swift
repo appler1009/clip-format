@@ -2,8 +2,8 @@ import AppKit
 import ClipFormatShared
 import SwiftUI
 
-/// The popover shown when the status item is clicked: pretty JSON when the
-/// clipboard has some, an explanation when it does not.
+/// The popover shown when the status item is clicked: pretty JSON or XML when
+/// the clipboard has some, an explanation when it does not.
 extension View {
     /// Pins content smaller than its scroll view to the top left, which
     /// SwiftUI otherwise centres in both axes.
@@ -76,7 +76,10 @@ struct PopoverView: View {
 
     private var statusTitle: String {
         guard document.isValid else {
-            return document.kind == .xml ? "Clipboard isn’t valid XML" : "Clipboard isn’t JSON"
+            if document.kind == .xml { return "Clipboard isn’t valid XML" }
+            // Unrecognised text is not a failed JSON document — do not pretend it is.
+            if document.errorTitle == "Can't format" { return "Nothing to format" }
+            return "Clipboard isn’t valid JSON"
         }
         switch document.kind {
         case .json: return "Clipboard is JSON"
@@ -116,7 +119,7 @@ struct PopoverView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Copy some JSON and it will show up here, formatted.")
+            Text("Copy some JSON or XML and it will show up here, formatted.")
                 .font(.system(size: 12))
                 .foregroundStyle(theme.secondaryForeground.color)
             if !document.rawExcerpt().isEmpty {

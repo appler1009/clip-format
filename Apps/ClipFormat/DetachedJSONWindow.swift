@@ -25,7 +25,7 @@ final class DetachedJSONWindow: NSWindow {
             backing: .buffered,
             defer: false
         )
-        title = "Clipboard JSON"
+        title = "ClipFormat"
         isReleasedWhenClosed = false
         minSize = NSSize(width: 380, height: 220)
         // A JSON payload is worth reading at full width, so the green button

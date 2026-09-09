@@ -119,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Show Clipboard JSON", action: #selector(showJSONWindow), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Clipboard", action: #selector(showJSONWindow), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "About ClipFormat", action: #selector(showAbout), keyEquivalent: "")
@@ -266,7 +266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "ClipFormat",
-            .init(rawValue: "Copyright"): "Revived.\nJSON in the menu bar and in Quick Look.",
+            .init(rawValue: "Copyright"): "Revived.\nJSON and XML in the menu bar and in Quick Look.",
         ])
     }
 
