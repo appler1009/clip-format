@@ -119,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Show Clipboard JSON", action: #selector(showJSONWindow), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Clipboard", action: #selector(showJSONWindow), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "About ClipFormat", action: #selector(showAbout), keyEquivalent: "")
@@ -139,13 +139,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// One view, two hosts. Both get their own controller but the same
     /// `monitor`, so the popover and a torn-off window stay in step without
     /// anything being copied between them.
-    private func makeContentController() -> NSHostingController<PopoverView> {
+    private func makeContentController(showsDetachHandle: Bool = false) -> NSHostingController<PopoverView> {
         NSHostingController(
             rootView: PopoverView(
                 monitor: monitor,
                 preferences: preferences,
                 openPreferences: { [weak self] in self?.openPreferences() },
-                quit: { [weak self] in self?.quit() }
+                quit: { [weak self] in self?.quit() },
+                showsDetachHandle: showsDetachHandle
             )
         )
     }
@@ -154,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
-        let hosting = makeContentController()
+        let hosting = makeContentController(showsDetachHandle: true)
         // The view carries no fixed frame any more, so that the torn-off
         // window can resize it. That leaves the hosting controller reporting a
         // zero preferred size, which opens the popover invisibly, so the
@@ -266,7 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "ClipFormat",
-            .init(rawValue: "Copyright"): "Revived.\nJSON in the menu bar and in Quick Look.",
+            .init(rawValue: "Copyright"): "Revived.\nJSON and XML in the menu bar and in Quick Look.",
         ])
     }
 

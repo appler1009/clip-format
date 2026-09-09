@@ -112,8 +112,16 @@ public enum FormatCanvas {
             // Not JSON in any reading; fall through to the document's own error.
         }
 
+        // A parse error from a JSON-shaped source stays a JSON error. Plain text
+        // that never looked like JSON or XML is not "Not JSON" — the app formats
+        // more than one kind.
+        if let documentError {
+            return FormattedDocument(source: trimmed, indent: indent, value: nil,
+                                      errorMessage: documentError.message)
+        }
         return FormattedDocument(source: trimmed, indent: indent, value: nil,
-                                  errorMessage: documentError?.message ?? "Not JSON")
+                                  errorTitle: "Can't format",
+                                  errorMessage: "Not JSON or XML")
     }
 
     /// What reading the source as JSON Lines turned up.
@@ -259,7 +267,7 @@ public enum FormatCanvas {
             body = "<pre class=\"json\">\(code)</pre>"
         } else {
             let title = escapeHTML(document.errorTitle)
-            let message = escapeHTML(document.errorMessage ?? "Not JSON")
+            let message = escapeHTML(document.errorMessage ?? "Can't format")
             let excerpt = escapeHTML(document.rawExcerpt(limit: 2_000))
             body = """
             <div class="notice"><span class="badge">\(title)</span><span class="reason">\(message)</span></div>

@@ -83,7 +83,8 @@ final class FormatCanvasTests: XCTestCase {
     func testNonJSONAndEmptyStates() {
         let text = FormatCanvas.model(from: "hello world")
         XCTAssertFalse(text.isValid)
-        XCTAssertEqual(text.errorMessage, "Not JSON")
+        XCTAssertEqual(text.errorTitle, "Can't format")
+        XCTAssertEqual(text.errorMessage, "Not JSON or XML")
 
         let empty = FormatCanvas.model(from: "   \n ")
         XCTAssertFalse(empty.isValid)
@@ -121,7 +122,8 @@ final class FormatCanvasTests: XCTestCase {
 
     func testInvalidHTMLShowsExcerpt() {
         let html = FormatCanvas.html(from: FormatCanvas.model(from: "not json <x>"), appearance: .light)
-        XCTAssertTrue(html.contains("Not JSON"))
+        XCTAssertTrue(html.contains("Can't format"))
+        XCTAssertTrue(html.contains("Not JSON or XML"))
         XCTAssertTrue(html.contains("not json &lt;x&gt;"))
     }
 
@@ -228,10 +230,10 @@ final class FormatCanvasTests: XCTestCase {
         XCTAssertNotNil(document.errorMessage)
     }
 
-    func testTextThatIsNeitherJSONNorXMLIsStillNotJSON() {
+    func testTextThatIsNeitherJSONNorXMLIsNotPretendedToBeJSON() {
         let document = FormatCanvas.model(from: "hello world")
-        XCTAssertEqual(document.errorTitle, "Not JSON")
-        XCTAssertEqual(document.errorMessage, "Not JSON")
+        XCTAssertEqual(document.errorTitle, "Can't format")
+        XCTAssertEqual(document.errorMessage, "Not JSON or XML")
     }
 
     func testXMLTokensCarryTagAndAttributeKinds() {

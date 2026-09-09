@@ -2,8 +2,8 @@ import AppKit
 import ClipFormatShared
 import SwiftUI
 
-/// The popover shown when the status item is clicked: pretty JSON when the
-/// clipboard has some, an explanation when it does not.
+/// The popover shown when the status item is clicked: pretty JSON or XML when
+/// the clipboard has some, an explanation when it does not.
 extension View {
     /// Pins content smaller than its scroll view to the top left, which
     /// SwiftUI otherwise centres in both axes.
@@ -30,6 +30,9 @@ struct PopoverView: View {
 
     var openPreferences: () -> Void
     var quit: () -> Void
+    /// Shown only while this view is in the status-item popover. The torn-off
+    /// window has its own title bar, so the handle would be noise there.
+    var showsDetachHandle: Bool = false
 
     private var appearance: Appearance { colorScheme == .dark ? .dark : .light }
     private var theme: Theme { Theme.theme(for: appearance) }
@@ -37,8 +40,18 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
+            if showsDetachHandle {
+                detachHandle
+            }
+            if monitor.isFormatting {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                Divider()
+            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             Divider()
@@ -51,51 +64,26 @@ struct PopoverView: View {
         .background(theme.background.color)
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(document.isValid ? Color.green : Color.red)
-                .frame(width: 8, height: 8)
-            Text(statusTitle)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(theme.foreground.color)
-            if monitor.isFormatting {
-                ProgressView().controlSize(.small)
+    /// A quiet grabber. AppKit already tears the popover off when the user
+    /// drags it; this only says where to start.
+    private var detachHandle: some View {
+        Capsule()
+            .fill(theme.secondaryForeground.color.opacity(0.4))
+            .frame(width: 36, height: 4)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .help("Drag to tear off into a window")
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.openHand.push()
+                } else {
+                    NSCursor.pop()
+                }
             }
-            Spacer()
-            if let detail = statusDetail {
-                Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.secondaryForeground.color)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    private var statusTitle: String {
-        guard document.isValid else {
-            return document.kind == .xml ? "Clipboard isn’t valid XML" : "Clipboard isn’t JSON"
-        }
-        switch document.kind {
-        case .json: return "Clipboard is JSON"
-        case .lineDelimited: return "Clipboard is JSON Lines"
-        case .jsonc: return "Clipboard is JSONC"
-        case .xml: return "Clipboard is XML"
-        }
-    }
-
-    private var statusDetail: String? {
-        guard document.isValid else { return document.errorMessage }
-        let bytes = ByteCountFormatter.string(fromByteCount: Int64(document.source.utf8.count),
-                                              countStyle: .file)
-        // The record count is the thing worth knowing about a JSON Lines file;
-        // the byte count says little about how much is in it.
-        let summary = document.kind == .lineDelimited
-            ? "\(document.recordCount) \(document.recordCount == 1 ? "record" : "records") · \(bytes)"
-            : bytes
-        return document.isTruncated ? "\(summary) · truncated" : summary
+            .accessibilityLabel("Tear off")
+            .accessibilityHint("Drag to keep this view open as a window")
     }
 
     @ViewBuilder
@@ -115,10 +103,7 @@ struct PopoverView: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Copy some JSON and it will show up here, formatted.")
-                .font(.system(size: 12))
-                .foregroundStyle(theme.secondaryForeground.color)
+        Group {
             if !document.rawExcerpt().isEmpty {
                 ScrollView {
                     Text(document.rawExcerpt(limit: 1_200))
@@ -126,16 +111,12 @@ struct PopoverView: View {
                         .foregroundStyle(theme.secondaryForeground.color)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(10)
+                        .padding(14)
                 }
                 .topLeadingAnchored()
-                .background(theme.secondaryBackground.color)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .frame(maxHeight: 160)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var footer: some View {

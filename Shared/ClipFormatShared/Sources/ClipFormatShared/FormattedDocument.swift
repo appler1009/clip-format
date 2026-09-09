@@ -27,8 +27,9 @@ public struct FormattedDocument: Sendable {
     /// processing instruction beside it. Empty for every JSON kind.
     public let xmlNodes: [XMLValue]
     /// Short label for the failure state, shown as the badge in both hosts.
-    /// "Not JSON" is right for most failures but wrong for a file we refused
-    /// to read on size alone, which may well be perfectly good JSON.
+    /// "Not JSON" / "Not XML" name a format that was attempted; "Can't format"
+    /// is for text that never looked like either. "Too large" is for a file we
+    /// refused to read on size alone, which may well be perfectly good.
     public let errorTitle: String
     public let errorMessage: String?
     /// True when the formatted output was too long to show in full and the
