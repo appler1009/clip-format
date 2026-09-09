@@ -74,26 +74,8 @@ struct PopoverView: View {
         }
     }
 
-    /// The menu-bar badge already says whether the clipboard is usable. This
-    /// view only shows a message when there is something to diagnose — a parse
-    /// error, a size refusal — not a restatement of "nothing to format".
-    private var diagnosticMessage: String? {
-        guard let message = document.errorMessage else { return nil }
-        switch message {
-        case "Not JSON or XML", "Clipboard is empty":
-            return nil
-        default:
-            return message
-        }
-    }
-
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let diagnosticMessage {
-                Text(diagnosticMessage)
-                    .font(.system(size: 12))
-                    .foregroundStyle(theme.secondaryForeground.color)
-            }
+        Group {
             if !document.rawExcerpt().isEmpty {
                 ScrollView {
                     Text(document.rawExcerpt(limit: 1_200))
@@ -101,16 +83,12 @@ struct PopoverView: View {
                         .foregroundStyle(theme.secondaryForeground.color)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(10)
+                        .padding(14)
                 }
                 .topLeadingAnchored()
-                .background(theme.secondaryBackground.color)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .frame(maxHeight: 160)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(14)
     }
 
     private var footer: some View {
