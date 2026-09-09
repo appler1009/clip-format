@@ -18,6 +18,10 @@ struct PreferencesView: View {
                 Text("⌘+ / ⌘− in the popover change the size. Quick Look uses these values the next time you press Space.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                Toggle("Show invisible characters", isOn: $preferences.showInvisibles)
+                Text("Spaces, tabs, and line breaks in the preview — formatted or plain. Copy Pretty / Minified stay clean.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
 
             Section("Menu bar") {
