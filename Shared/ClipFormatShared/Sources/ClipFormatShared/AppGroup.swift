@@ -14,6 +14,7 @@ public enum AppGroup {
         public static let indentWidth = "indentWidth"
         public static let fontSize = "fontSize"
         public static let showBadge = "showBadge"
+        public static let showInvisibles = "showInvisibles"
     }
 
     public static let defaultIndentWidth = 2

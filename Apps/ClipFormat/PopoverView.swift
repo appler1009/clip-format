@@ -234,7 +234,8 @@ struct PopoverView: View {
         if document.isValid {
             ScrollView([.vertical, .horizontal]) {
                 Text(FormatCanvas.attributedString(from: document, appearance: appearance,
-                                                fontSize: CGFloat(preferences.fontSize)))
+                                                fontSize: CGFloat(preferences.fontSize),
+                                                showInvisibles: preferences.showInvisibles))
                     .textSelection(.enabled)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -249,7 +250,7 @@ struct PopoverView: View {
         Group {
             if !document.rawExcerpt().isEmpty {
                 ScrollView {
-                    Text(document.rawExcerpt(limit: 1_200))
+                    Text(rawPreviewText)
                         .font(.system(size: CGFloat(max(11, preferences.fontSize - 1)), design: .monospaced))
                         .foregroundStyle(theme.secondaryForeground.color)
                         .textSelection(.enabled)
@@ -260,6 +261,13 @@ struct PopoverView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Unrecognized clipboard text — same invisibles mapping as formatted preview.
+    private var rawPreviewText: String {
+        let excerpt = document.rawExcerpt(limit: 1_200)
+        guard preferences.showInvisibles else { return excerpt }
+        return FormatCanvas.revealInvisibles(in: excerpt)
     }
 
     /// Writing our own output back bumps `changeCount`; the monitor simply picks

@@ -536,4 +536,26 @@ final class FormatCanvasTests: XCTestCase {
         let deep = String(repeating: "[", count: 5_000) + String(repeating: "]", count: 5_000)
         XCTAssertFalse(FormatCanvas.model(from: deep).isValid)
     }
+
+    func testRevealInvisiblesMapsWhitespace() {
+        XCTAssertEqual(FormatCanvas.revealInvisibles(in: "a b\tc\nd"), "a·b⇥c↵\nd")
+        XCTAssertEqual(FormatCanvas.revealInvisibles(in: "plain"), "plain")
+    }
+
+    func testAttributedStringOptionallyRevealsInvisibles() {
+        let document = FormatCanvas.model(from: #"{"a":1}"#)
+        XCTAssertEqual(document.prettyText, "{\n  \"a\": 1\n}")
+
+        let plain = String(FormatCanvas.attributedString(from: document, appearance: .light).characters)
+        XCTAssertEqual(plain, "{\n  \"a\": 1\n}")
+        XCTAssertFalse(plain.contains("·"))
+        XCTAssertFalse(plain.contains("↵"))
+
+        let shown = String(FormatCanvas.attributedString(from: document, appearance: .light,
+                                                         showInvisibles: true).characters)
+        XCTAssertEqual(shown, "{↵\n··\"a\":·1↵\n}")
+        // Copy sources stay clean even while the preview shows markers.
+        XCTAssertEqual(document.prettyText, "{\n  \"a\": 1\n}")
+        XCTAssertEqual(document.minifiedText, #"{"a":1}"#)
+    }
 }

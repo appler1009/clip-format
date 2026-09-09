@@ -16,6 +16,7 @@ final class Preferences: ObservableObject {
         static let indent = AppGroup.Key.indentWidth
         static let showBadge = AppGroup.Key.showBadge
         static let fontSize = AppGroup.Key.fontSize
+        static let showInvisibles = AppGroup.Key.showInvisibles
     }
 
     private let defaults: UserDefaults
@@ -27,6 +28,11 @@ final class Preferences: ObservableObject {
     /// When off, the status item shows plain braces with no ✓/✕ state.
     @Published var showBadge: Bool {
         didSet { defaults.set(showBadge, forKey: Key.showBadge) }
+    }
+
+    /// Spaces, tabs, and line breaks as visible glyphs in the preview only.
+    @Published var showInvisibles: Bool {
+        didSet { defaults.set(showInvisibles, forKey: Key.showInvisibles) }
     }
 
     /// Point size of the formatted JSON in the popover. ⌘+ / ⌘− nudge it.
@@ -60,10 +66,12 @@ final class Preferences: ObservableObject {
         defaults.register(defaults: [
             Key.indent: AppGroup.defaultIndentWidth,
             Key.showBadge: true,
+            Key.showInvisibles: false,
             Key.fontSize: Self.defaultFontSize,
         ])
         indentWidth = defaults.integer(forKey: Key.indent)
         showBadge = defaults.bool(forKey: Key.showBadge)
+        showInvisibles = defaults.bool(forKey: Key.showInvisibles)
         fontSize = defaults.integer(forKey: Key.fontSize)
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -82,6 +90,9 @@ final class Preferences: ObservableObject {
         }
         if standard.object(forKey: Key.showBadge) != nil {
             suite.set(standard.bool(forKey: Key.showBadge), forKey: Key.showBadge)
+        }
+        if standard.object(forKey: Key.showInvisibles) != nil {
+            suite.set(standard.bool(forKey: Key.showInvisibles), forKey: Key.showInvisibles)
         }
     }
 
