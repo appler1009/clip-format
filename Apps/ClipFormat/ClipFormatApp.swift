@@ -139,14 +139,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// One view, two hosts. Both get their own controller but the same
     /// `monitor`, so the popover and a torn-off window stay in step without
     /// anything being copied between them.
-    private func makeContentController(showsDetachHandle: Bool = false) -> NSHostingController<PopoverView> {
+    private func makeContentController(chrome: PopoverChrome) -> NSHostingController<PopoverView> {
         NSHostingController(
             rootView: PopoverView(
                 monitor: monitor,
                 preferences: preferences,
                 openPreferences: { [weak self] in self?.openPreferences() },
                 quit: { [weak self] in self?.quit() },
-                showsDetachHandle: showsDetachHandle
+                chrome: chrome
             )
         )
     }
@@ -155,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
-        let hosting = makeContentController(showsDetachHandle: true)
+        let hosting = makeContentController(chrome: .popover)
         // The view carries no fixed frame any more, so that the torn-off
         // window can resize it. That leaves the hosting controller reporting a
         // zero preferred size, which opens the popover invisibly, so the
@@ -293,7 +293,7 @@ extension AppDelegate: NSPopoverDelegate {
         // AppKit hands the popover's view over, but a SwiftUI hosting view
         // arrives without its sizing and renders blank, so the window gets its
         // own controller on the same monitor instead.
-        window.contentViewController = makeContentController()
+        window.contentViewController = makeContentController(chrome: .window)
         // A window the user has sized before comes back the way they left it.
         // Only a first-ever tear-off needs a size stated, because the view
         // carries a minimum but no fixed size and would otherwise open at
