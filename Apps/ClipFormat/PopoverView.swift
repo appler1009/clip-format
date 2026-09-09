@@ -38,7 +38,6 @@ struct PopoverView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var openPreferences: () -> Void
-    var quit: () -> Void
     var chrome: PopoverChrome = .popover
 
     private var appearance: Appearance { colorScheme == .dark ? .dark : .light }
@@ -96,12 +95,6 @@ struct PopoverView: View {
                     Image(systemName: "gearshape")
                 }
                 .help("Preferences")
-                Button {
-                    quit()
-                } label: {
-                    Image(systemName: "power")
-                }
-                .help("Quit ClipFormat")
             }
         }
         // Let the system draw the toolbar glass (Liquid Glass on Tahoe) rather
@@ -197,13 +190,6 @@ struct PopoverView: View {
             }
             .buttonStyle(.borderless)
             .help("Preferences")
-            Button {
-                quit()
-            } label: {
-                Image(systemName: "power")
-            }
-            .buttonStyle(.borderless)
-            .help("Quit ClipFormat")
         }
         .font(.system(size: 12))
         .padding(.horizontal, 12)

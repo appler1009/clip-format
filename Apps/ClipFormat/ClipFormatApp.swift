@@ -145,7 +145,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 monitor: monitor,
                 preferences: preferences,
                 openPreferences: { [weak self] in self?.openPreferences() },
-                quit: { [weak self] in self?.quit() },
                 chrome: chrome
             )
         )
