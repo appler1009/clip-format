@@ -4,6 +4,14 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.4.2
+
+- About ClipFormat reads `Revived.` on its own line, then `JSON in the menu bar
+  and in Quick Look.` — no more "Formats".
+- The installer DMG has a styled Finder window: white background matching the
+  light theme, minified → pretty as the drag direction, and the app's syntax
+  colours for the arrow between ClipFormat and Applications.
+
 ## 0.4.1
 
 - The formatted text sits at the top left of the pane again. A scroll view
