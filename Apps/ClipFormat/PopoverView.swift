@@ -89,6 +89,11 @@ struct PopoverView: View {
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            // Content smaller than the scroll view is centred by default, in
+            // both axes. That is invisible in a popover, where the text
+            // usually fills the frame, and glaring in a torn-off window the
+            // user has made large: a short document floats in the middle.
+            .defaultScrollAnchor(.topLeading)
         } else {
             emptyState
         }
@@ -108,6 +113,7 @@ struct PopoverView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(10)
                 }
+                .defaultScrollAnchor(.topLeading)
                 .background(theme.secondaryBackground.color)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .frame(maxHeight: 160)
