@@ -8,6 +8,10 @@ import AppKit
 /// empty and `detachableWindow(for:)` gives it its own controller over the same
 /// `ClipboardMonitor`. Do not "simplify" it back to inheriting the popover's
 /// view — that is the blank-window bug.
+///
+/// Actions live in the unified toolbar (Liquid Glass on Tahoe when built with
+/// the current SDK). Content uses a full-size title bar so the scroll view can
+/// sit under the glass with the system scroll-edge fade.
 @MainActor
 final class DetachedJSONWindow: NSWindow {
     /// Written at commit points — the end of a live resize, the start of a
@@ -18,19 +22,27 @@ final class DetachedJSONWindow: NSWindow {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-            // No fullSizeContentView: the content would slide under the
-            // traffic lights, and PopoverView's header is a compact row with
-            // no inset of its own to clear them with.
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         title = "ClipFormat"
+        titleVisibility = .visible
+        titlebarAppearsTransparent = true
         isReleasedWhenClosed = false
-        minSize = NSSize(width: 380, height: 220)
+        minSize = NSSize(width: 420, height: 220)
+        toolbarStyle = .unified
         // A JSON payload is worth reading at full width, so the green button
         // offers full screen rather than only zoom.
         collectionBehavior = [.fullScreenPrimary, .participatesInCycle]
+
+        // SwiftUI's `.toolbar` fills this; creating it here makes the unified
+        // glass chrome appear as soon as the window does rather than after the
+        // hosting view's first layout pass.
+        let toolbar = NSToolbar(identifier: "ClipFormatDetached")
+        toolbar.displayMode = .iconAndLabel
+        toolbar.allowsUserCustomization = false
+        self.toolbar = toolbar
     }
 
     override var canBecomeKey: Bool { true }
