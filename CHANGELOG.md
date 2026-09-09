@@ -4,6 +4,15 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.0
+
+- Settings → Formatting can show invisible characters: spaces as `·`, tabs as
+  `⇥`, and line breaks as `↵`. Works for formatted JSON/XML and for plain
+  unrecognized clipboard text. Copy Pretty / Minified stay clean.
+- The status-item popover and the torn-off window share the same top-trailing
+  Liquid Glass action cluster (Copy menu, font size, Preferences). The window
+  no longer uses a separate toolbar for those controls.
+
 ## 0.4.4
 
 - Preferences no longer includes the Quick Look troubleshooting blurb with
