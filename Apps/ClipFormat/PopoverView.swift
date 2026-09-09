@@ -79,13 +79,11 @@ struct PopoverView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button("Copy Pretty") { copy(document.prettyText) }
                     .disabled(!document.isValid)
                 Button("Copy Minified") { copy(document.minifiedText) }
                     .disabled(!document.isValid)
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
                 Button("A−") { preferences.decreaseFontSize() }
                     .disabled(preferences.fontSize <= Preferences.minFontSize)
                     .help("Smaller text (⌘−)")
