@@ -96,6 +96,10 @@ struct PopoverView: View {
             documentBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        // fullSizeContentView already draws under the title bar; ignore the
+        // safe-area inset so the actions sit level with the traffic lights
+        // instead of one row below them.
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     /// Leading grabber only in the popover; both hosts share the trailing actions.
@@ -112,7 +116,10 @@ struct PopoverView: View {
             actionBar
         }
         .padding(.horizontal, 14)
-        .padding(.top, 10)
+        // Window chrome lives in the title-bar band; keep top padding tight so
+        // glass controls center with the traffic lights. Popover keeps a bit
+        // more air under the popover edge.
+        .padding(.top, showsDetachHandle ? 10 : 8)
         .padding(.bottom, 8)
     }
 
