@@ -41,13 +41,6 @@ struct PreferencesView: View {
                 .buttonStyle(.link)
                 .font(.system(size: 11))
             }
-
-            Section("Quick Look") {
-                Text("Quick Look reads indent and font size from the same App Group as this window. If Spacebar previews don’t change, keep ClipFormat in Applications, open it once, then run `qlmanage -r` in Terminal.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .formStyle(.grouped)
         .frame(width: 400)
