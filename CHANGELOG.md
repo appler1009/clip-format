@@ -4,6 +4,16 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.4.3
+
+- The popover no longer restates what the menu-bar ✓/✕ already says: status
+  titles, coloured dots and error labels are gone. Unrecognised clipboard text
+  is not labelled as broken JSON.
+- A quiet grabber at the top of the popover cues drag-to-tear-off. The torn-off
+  window keeps its title bar and omits the handle.
+- About, window title and the status-item menu name the product rather than
+  assuming JSON is the only format.
+
 ## 0.4.2
 
 - About ClipFormat reads `Revived.` on its own line, then `JSON in the menu bar
