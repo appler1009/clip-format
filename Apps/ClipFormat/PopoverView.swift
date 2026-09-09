@@ -22,11 +22,22 @@ extension View {
             defaultScrollAnchor(.topLeading)
         }
     }
+
+    /// Liquid Glass on Tahoe; a material capsule on earlier systems so the
+    /// popover chrome still reads as a floating control cluster.
+    @ViewBuilder
+    func popoverGlassChrome() -> some View {
+        if #available(macOS 26, *) {
+            self.glassEffect(.regular.interactive())
+        } else {
+            self.background(.regularMaterial, in: Capsule())
+        }
+    }
 }
 
-/// Where this view is hosted. The popover keeps a bottom footer and a tear-off
-/// grabber; the window lifts the same actions into the title-bar toolbar so
-/// Tahoe can put them on Liquid Glass.
+/// Where this view is hosted. The popover puts actions in a top-trailing glass
+/// cluster beside the tear-off grabber; the window lifts them into the
+/// title-bar toolbar so Tahoe can put them on Liquid Glass.
 enum PopoverChrome {
     case popover
     case window
@@ -62,13 +73,30 @@ struct PopoverView: View {
 
     private var popoverBody: some View {
         VStack(spacing: 0) {
-            detachHandle
+            popoverTopBar
             formattingBanner
             documentBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            Divider()
-            footer
         }
+    }
+
+    /// Grabber on the leading edge, glass actions trailing — the same order as
+    /// the torn-off window's title bar (traffic lights left, controls right).
+    private var popoverTopBar: some View {
+        HStack(spacing: 10) {
+            detachHandle
+            Spacer(minLength: 8)
+            HStack(spacing: 8) {
+                actionButtons
+            }
+            .font(.system(size: 12))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .popoverGlassChrome()
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
     }
 
     private var windowBody: some View {
@@ -79,22 +107,7 @@ struct PopoverView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button("Copy Pretty") { copy(document.prettyText) }
-                    .disabled(!document.isValid)
-                Button("Copy Minified") { copy(document.minifiedText) }
-                    .disabled(!document.isValid)
-                Button("A−") { preferences.decreaseFontSize() }
-                    .disabled(preferences.fontSize <= Preferences.minFontSize)
-                    .help("Smaller text (⌘−)")
-                Button("A+") { preferences.increaseFontSize() }
-                    .disabled(preferences.fontSize >= Preferences.maxFontSize)
-                    .help("Larger text (⌘+)")
-                Button {
-                    openPreferences()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .help("Preferences")
+                actionButtons
             }
         }
         // Let the system draw the toolbar glass (Liquid Glass on Tahoe) rather
@@ -102,15 +115,34 @@ struct PopoverView: View {
         .toolbarBackground(.automatic, for: .windowToolbar)
     }
 
-    /// A quiet grabber. AppKit already tears the popover off when the user
+    /// Shared by the popover glass cluster and the window toolbar.
+    @ViewBuilder
+    private var actionButtons: some View {
+        Button("Copy Pretty") { copy(document.prettyText) }
+            .disabled(!document.isValid)
+        Button("Copy Minified") { copy(document.minifiedText) }
+            .disabled(!document.isValid)
+        Button("A−") { preferences.decreaseFontSize() }
+            .disabled(preferences.fontSize <= Preferences.minFontSize)
+            .help("Smaller text (⌘−)")
+        Button("A+") { preferences.increaseFontSize() }
+            .disabled(preferences.fontSize >= Preferences.maxFontSize)
+            .help("Larger text (⌘+)")
+        Button {
+            openPreferences()
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .help("Preferences")
+    }
+
+    /// Leading grabber. AppKit already tears the popover off when the user
     /// drags it; this only says where to start.
     private var detachHandle: some View {
         Capsule()
             .fill(theme.secondaryForeground.color.opacity(0.4))
             .frame(width: 36, height: 4)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-            .frame(maxWidth: .infinity)
+            .frame(width: 44, height: 28, alignment: .center)
             .contentShape(Rectangle())
             .help("Drag to tear off into a window")
             .onHover { hovering in
@@ -168,32 +200,6 @@ struct PopoverView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var footer: some View {
-        HStack(spacing: 8) {
-            Button("Copy Pretty") { copy(document.prettyText) }
-                .disabled(!document.isValid)
-            Button("Copy Minified") { copy(document.minifiedText) }
-                .disabled(!document.isValid)
-            Spacer()
-            Button("A−") { preferences.decreaseFontSize() }
-                .disabled(preferences.fontSize <= Preferences.minFontSize)
-                .help("Smaller text (⌘−)")
-            Button("A+") { preferences.increaseFontSize() }
-                .disabled(preferences.fontSize >= Preferences.maxFontSize)
-                .help("Larger text (⌘+)")
-            Button {
-                openPreferences()
-            } label: {
-                Image(systemName: "gearshape")
-            }
-            .buttonStyle(.borderless)
-            .help("Preferences")
-        }
-        .font(.system(size: 12))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
     }
 
     /// Writing our own output back bumps `changeCount`; the monitor simply picks
