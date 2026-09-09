@@ -4,6 +4,13 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.4.1
+
+- The formatted text sits at the top left of the pane again. A scroll view
+  centres content smaller than itself, which never showed in the popover's
+  fixed frame but left a short document floating in the middle of a torn-off
+  window that had been made large.
+
 ## 0.4.0
 
 - JSONC. `.jsonc` files, and any `.json` that tooling has written loosely —
