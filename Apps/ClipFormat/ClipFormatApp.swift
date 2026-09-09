@@ -139,13 +139,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// One view, two hosts. Both get their own controller but the same
     /// `monitor`, so the popover and a torn-off window stay in step without
     /// anything being copied between them.
-    private func makeContentController() -> NSHostingController<PopoverView> {
+    private func makeContentController(showsDetachHandle: Bool = false) -> NSHostingController<PopoverView> {
         NSHostingController(
             rootView: PopoverView(
                 monitor: monitor,
                 preferences: preferences,
                 openPreferences: { [weak self] in self?.openPreferences() },
-                quit: { [weak self] in self?.quit() }
+                quit: { [weak self] in self?.quit() },
+                showsDetachHandle: showsDetachHandle
             )
         )
     }
@@ -154,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
-        let hosting = makeContentController()
+        let hosting = makeContentController(showsDetachHandle: true)
         // The view carries no fixed frame any more, so that the torn-off
         // window can resize it. That leaves the hosting controller reporting a
         // zero preferred size, which opens the popover invisibly, so the

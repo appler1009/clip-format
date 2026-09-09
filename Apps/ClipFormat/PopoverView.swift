@@ -30,6 +30,9 @@ struct PopoverView: View {
 
     var openPreferences: () -> Void
     var quit: () -> Void
+    /// Shown only while this view is in the status-item popover. The torn-off
+    /// window has its own title bar, so the handle would be noise there.
+    var showsDetachHandle: Bool = false
 
     private var appearance: Appearance { colorScheme == .dark ? .dark : .light }
     private var theme: Theme { Theme.theme(for: appearance) }
@@ -37,6 +40,9 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if showsDetachHandle {
+                detachHandle
+            }
             if monitor.isFormatting {
                 HStack {
                     ProgressView().controlSize(.small)
@@ -56,6 +62,28 @@ struct PopoverView: View {
         .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity,
                minHeight: 180, idealHeight: 420, maxHeight: .infinity)
         .background(theme.background.color)
+    }
+
+    /// A quiet grabber. AppKit already tears the popover off when the user
+    /// drags it; this only says where to start.
+    private var detachHandle: some View {
+        Capsule()
+            .fill(theme.secondaryForeground.color.opacity(0.4))
+            .frame(width: 36, height: 4)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .help("Drag to tear off into a window")
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.openHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .accessibilityLabel("Tear off")
+            .accessibilityHint("Drag to keep this view open as a window")
     }
 
     @ViewBuilder
