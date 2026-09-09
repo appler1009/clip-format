@@ -23,14 +23,15 @@ extension View {
         }
     }
 
-    /// Liquid Glass on Tahoe; a material capsule on earlier systems so the
-    /// popover chrome still reads as a floating control cluster.
+    /// Liquid Glass per control on Tahoe — same idea as toolbar items, not one
+    /// enclosing capsule. Earlier systems stay plain so they do not invent a
+    /// group chrome the window never had.
     @ViewBuilder
-    func popoverGlassChrome() -> some View {
+    func toolbarLikeGlass() -> some View {
         if #available(macOS 26, *) {
             self.glassEffect(.regular.interactive())
         } else {
-            self.background(.regularMaterial, in: Capsule())
+            self
         }
     }
 }
@@ -80,23 +81,55 @@ struct PopoverView: View {
         }
     }
 
-    /// Grabber on the leading edge, glass actions trailing — the same order as
-    /// the torn-off window's title bar (traffic lights left, controls right).
+    /// Grabber on the leading edge, actions trailing — same order as the
+    /// torn-off window's title bar. Each control gets its own glass, not a
+    /// shared enclosing group.
     private var popoverTopBar: some View {
         HStack(spacing: 10) {
             detachHandle
             Spacer(minLength: 8)
-            HStack(spacing: 8) {
-                actionButtons
-            }
-            .font(.system(size: 12))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .popoverGlassChrome()
+            popoverActionBar
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 6)
+    }
+
+    @ViewBuilder
+    private var popoverActionBar: some View {
+        let buttons = HStack(spacing: 6) {
+            Button("Copy Pretty") { copy(document.prettyText) }
+                .disabled(!document.isValid)
+                .toolbarLikeGlass()
+            Button("Copy Minified") { copy(document.minifiedText) }
+                .disabled(!document.isValid)
+                .toolbarLikeGlass()
+            Button("A−") { preferences.decreaseFontSize() }
+                .disabled(preferences.fontSize <= Preferences.minFontSize)
+                .help("Smaller text (⌘−)")
+                .toolbarLikeGlass()
+            Button("A+") { preferences.increaseFontSize() }
+                .disabled(preferences.fontSize >= Preferences.maxFontSize)
+                .help("Larger text (⌘+)")
+                .toolbarLikeGlass()
+            Button {
+                openPreferences()
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .help("Preferences")
+            .toolbarLikeGlass()
+        }
+        .font(.system(size: 12))
+        .buttonStyle(.borderless)
+
+        if #available(macOS 26, *) {
+            // One sampling pass for neighbouring glass controls — same rule as
+            // the system toolbar, which would otherwise look uneven.
+            GlassEffectContainer(spacing: 6) { buttons }
+        } else {
+            buttons
+        }
     }
 
     private var windowBody: some View {
