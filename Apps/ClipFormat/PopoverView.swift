@@ -37,8 +37,15 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
+            if monitor.isFormatting {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                Divider()
+            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             Divider()
@@ -49,56 +56,6 @@ struct PopoverView: View {
         .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity,
                minHeight: 180, idealHeight: 420, maxHeight: .infinity)
         .background(theme.background.color)
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(document.isValid ? Color.green : Color.red)
-                .frame(width: 8, height: 8)
-            Text(statusTitle)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(theme.foreground.color)
-            if monitor.isFormatting {
-                ProgressView().controlSize(.small)
-            }
-            Spacer()
-            if let detail = statusDetail {
-                Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.secondaryForeground.color)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    private var statusTitle: String {
-        guard document.isValid else {
-            if document.kind == .xml { return "Clipboard isn’t valid XML" }
-            // Unrecognised text is not a failed JSON document — do not pretend it is.
-            if document.errorTitle == "Can't format" { return "Nothing to format" }
-            return "Clipboard isn’t valid JSON"
-        }
-        switch document.kind {
-        case .json: return "Clipboard is JSON"
-        case .lineDelimited: return "Clipboard is JSON Lines"
-        case .jsonc: return "Clipboard is JSONC"
-        case .xml: return "Clipboard is XML"
-        }
-    }
-
-    private var statusDetail: String? {
-        guard document.isValid else { return document.errorMessage }
-        let bytes = ByteCountFormatter.string(fromByteCount: Int64(document.source.utf8.count),
-                                              countStyle: .file)
-        // The record count is the thing worth knowing about a JSON Lines file;
-        // the byte count says little about how much is in it.
-        let summary = document.kind == .lineDelimited
-            ? "\(document.recordCount) \(document.recordCount == 1 ? "record" : "records") · \(bytes)"
-            : bytes
-        return document.isTruncated ? "\(summary) · truncated" : summary
     }
 
     @ViewBuilder
@@ -117,11 +74,26 @@ struct PopoverView: View {
         }
     }
 
+    /// The menu-bar badge already says whether the clipboard is usable. This
+    /// view only shows a message when there is something to diagnose — a parse
+    /// error, a size refusal — not a restatement of "nothing to format".
+    private var diagnosticMessage: String? {
+        guard let message = document.errorMessage else { return nil }
+        switch message {
+        case "Not JSON or XML", "Clipboard is empty":
+            return nil
+        default:
+            return message
+        }
+    }
+
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Copy some JSON or XML and it will show up here, formatted.")
-                .font(.system(size: 12))
-                .foregroundStyle(theme.secondaryForeground.color)
+            if let diagnosticMessage {
+                Text(diagnosticMessage)
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.secondaryForeground.color)
+            }
             if !document.rawExcerpt().isEmpty {
                 ScrollView {
                     Text(document.rawExcerpt(limit: 1_200))
@@ -137,7 +109,7 @@ struct PopoverView: View {
                 .frame(maxHeight: 160)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(14)
     }
 
