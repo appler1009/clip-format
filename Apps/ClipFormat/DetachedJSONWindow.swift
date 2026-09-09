@@ -9,9 +9,9 @@ import AppKit
 /// `ClipboardMonitor`. Do not "simplify" it back to inheriting the popover's
 /// view — that is the blank-window bug.
 ///
-/// Actions live in the unified toolbar (Liquid Glass on Tahoe when built with
-/// the current SDK). Content uses a full-size title bar so the scroll view can
-/// sit under the glass with the system scroll-edge fade.
+/// Actions sit in the SwiftUI chrome (same cluster as the popover). Content
+/// uses a full-size title bar so the window still gets traffic lights and a
+/// drag region without an NSToolbar of its own.
 @MainActor
 final class DetachedJSONWindow: NSWindow {
     /// Written at commit points — the end of a live resize, the start of a
@@ -27,22 +27,13 @@ final class DetachedJSONWindow: NSWindow {
             defer: false
         )
         title = "ClipFormat"
-        titleVisibility = .visible
+        titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isReleasedWhenClosed = false
         minSize = NSSize(width: 420, height: 220)
-        toolbarStyle = .unified
         // A JSON payload is worth reading at full width, so the green button
         // offers full screen rather than only zoom.
         collectionBehavior = [.fullScreenPrimary, .participatesInCycle]
-
-        // SwiftUI's `.toolbar` fills this; creating it here makes the unified
-        // glass chrome appear as soon as the window does rather than after the
-        // hosting view's first layout pass.
-        let toolbar = NSToolbar(identifier: "ClipFormatDetached")
-        toolbar.displayMode = .iconAndLabel
-        toolbar.allowsUserCustomization = false
-        self.toolbar = toolbar
     }
 
     override var canBecomeKey: Bool { true }
