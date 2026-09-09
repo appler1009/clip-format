@@ -24,14 +24,20 @@ extension View {
     }
 
     /// Liquid Glass per control on Tahoe — same idea as toolbar items, not one
-    /// enclosing capsule. Earlier systems stay plain so they do not invent a
-    /// group chrome the window never had.
+    /// enclosing capsule. Padding is applied *before* the glass so the shape
+    /// has room around the glyph instead of hugging it. Earlier systems stay
+    /// plain so they do not invent a group chrome the window never had.
     @ViewBuilder
     func toolbarLikeGlass() -> some View {
         if #available(macOS 26, *) {
-            self.glassEffect(.regular.interactive())
+            self
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .glassEffect(.regular.interactive())
         } else {
             self
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
         }
     }
 }
@@ -85,34 +91,43 @@ struct PopoverView: View {
     /// torn-off window's title bar. Each control gets its own glass, not a
     /// shared enclosing group.
     private var popoverTopBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             detachHandle
-            Spacer(minLength: 8)
+            Spacer(minLength: 16)
             popoverActionBar
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
     }
 
     @ViewBuilder
     private var popoverActionBar: some View {
-        let buttons = HStack(spacing: 12) {
-            copyMenu.toolbarLikeGlass()
-            smallerTextButton.toolbarLikeGlass()
-            largerTextButton.toolbarLikeGlass()
-            preferencesButton.toolbarLikeGlass()
-        }
-        .font(.system(size: 13))
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-
+        // Spacing has to live both in the HStack and in GlassEffectContainer —
+        // the container's spacing is what keeps neighbouring glass shapes apart.
+        let gap: CGFloat = 20
         if #available(macOS 26, *) {
-            // One sampling pass for neighbouring glass controls — same rule as
-            // the system toolbar, which would otherwise look uneven.
-            GlassEffectContainer(spacing: 12) { buttons }
+            GlassEffectContainer(spacing: gap) {
+                HStack(spacing: gap) {
+                    copyMenu.toolbarLikeGlass()
+                    smallerTextButton.toolbarLikeGlass()
+                    largerTextButton.toolbarLikeGlass()
+                    preferencesButton.toolbarLikeGlass()
+                }
+                .font(.system(size: 13))
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+            }
         } else {
-            buttons
+            HStack(spacing: gap) {
+                copyMenu.toolbarLikeGlass()
+                smallerTextButton.toolbarLikeGlass()
+                largerTextButton.toolbarLikeGlass()
+                preferencesButton.toolbarLikeGlass()
+            }
+            .font(.system(size: 13))
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
         }
     }
 
