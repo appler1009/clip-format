@@ -4,6 +4,11 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.4.4
+
+- Preferences no longer includes the Quick Look troubleshooting blurb with
+  `qlmanage` — that belongs in the README, not in Settings.
+
 ## 0.4.3
 
 - The popover no longer restates what the menu-bar ✓/✕ already says: status
