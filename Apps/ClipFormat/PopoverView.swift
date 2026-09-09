@@ -4,6 +4,25 @@ import SwiftUI
 
 /// The popover shown when the status item is clicked: pretty JSON when the
 /// clipboard has some, an explanation when it does not.
+extension View {
+    /// Pins content smaller than its scroll view to the top left, which
+    /// SwiftUI otherwise centres in both axes.
+    ///
+    /// The unparameterised `defaultScrollAnchor` sets the anchor for every
+    /// role — initial offset and size changes as well as alignment — so on
+    /// macOS 15 and later only the alignment role is claimed, leaving a
+    /// resize while scrolled to keep its position. macOS 14 has only the
+    /// blunt form.
+    @ViewBuilder
+    func topLeadingAnchored() -> some View {
+        if #available(macOS 15, *) {
+            defaultScrollAnchor(.topLeading, for: .alignment)
+        } else {
+            defaultScrollAnchor(.topLeading)
+        }
+    }
+}
+
 struct PopoverView: View {
     @ObservedObject var monitor: ClipboardMonitor
     @ObservedObject var preferences: Preferences
@@ -89,6 +108,7 @@ struct PopoverView: View {
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .topLeadingAnchored()
         } else {
             emptyState
         }
@@ -108,6 +128,7 @@ struct PopoverView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(10)
                 }
+                .topLeadingAnchored()
                 .background(theme.secondaryBackground.color)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .frame(maxHeight: 160)
