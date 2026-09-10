@@ -4,6 +4,11 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.2
+
+- ⌘, from a torn-off clipboard window opens the real Settings panel instead of
+  an empty SwiftUI Settings stub.
+
 ## 0.5.1
 
 - The tear-off grabber is a 2×3 six-dot grip instead of a flat horizontal
