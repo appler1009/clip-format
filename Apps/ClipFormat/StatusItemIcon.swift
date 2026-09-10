@@ -7,7 +7,7 @@ import AppKit
 /// pick up the correct label colour every time the menu bar redraws — including
 /// when the user flips appearance or turns on a tinted desktop.
 enum StatusItemIcon {
-    enum State {
+    enum State: Hashable {
         case valid
         case invalid
         case neutral
@@ -39,7 +39,20 @@ enum StatusItemIcon {
 
     private static let size = NSSize(width: 20, height: 18)
 
+    /// Three discrete states — cache the `NSImage` wrappers. Drawing still runs
+    /// through `drawingHandler` when the menu bar needs a fresh composite
+    /// (appearance / tint changes), so the glyphs stay correct.
+    private static let images: [State: NSImage] = [
+        .valid: makeImage(for: .valid),
+        .invalid: makeImage(for: .invalid),
+        .neutral: makeImage(for: .neutral),
+    ]
+
     static func image(for state: State) -> NSImage {
+        images[state]!
+    }
+
+    private static func makeImage(for state: State) -> NSImage {
         let image = NSImage(size: size, flipped: false) { _ in
             draw(state: state)
             return true

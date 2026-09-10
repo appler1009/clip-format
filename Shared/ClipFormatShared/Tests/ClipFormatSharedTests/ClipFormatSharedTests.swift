@@ -490,10 +490,18 @@ final class FormatCanvasTests: XCTestCase {
     }
 
     func testTruncationAppendsNotice() {
-        let tokens = PrettyPrinter.tokens(for: .array(Array(repeating: .number("1"), count: 200)), indent: 2)
+        let tokens = PrettyPrinter.tokens(for: .array(Array(repeating: .number("1"), count: 200)), indent: 2).tokens
         let truncated = FormatCanvas.truncate(tokens, toCharacters: 40)
         XCTAssertTrue(truncated.map(\.text).joined().hasSuffix("… truncated"))
         XCTAssertLessThan(truncated.count, tokens.count)
+    }
+
+    func testBudgetedTokensStopEarly() {
+        let value = JSONValue.array(Array(repeating: .number("1"), count: 50_000))
+        let printed = PrettyPrinter.tokens(for: value, indent: 2, characterLimit: 200)
+        XCTAssertTrue(printed.isTruncated)
+        XCTAssertTrue(printed.tokens.map(\.text).joined().hasSuffix("… truncated"))
+        XCTAssertLessThan(printed.tokens.map(\.text).joined().count, 250)
     }
 
     func testOversizedDocumentTruncatesFormattedOutput() {

@@ -4,6 +4,10 @@ import SwiftUI
 public extension FormatCanvas {
     /// The popover's counterpart to `html(from:)` — same tokens, same theme.
     ///
+    /// Neighbouring tokens of the same kind are coalesced into one
+    /// `AttributedString` run (mirroring the HTML renderer) so a pretty-printed
+    /// object does not allocate one piece per punctuation mark.
+    ///
     /// When `showInvisibles` is on, spaces / tabs / line breaks become visible
     /// glyphs in the attributed string only. `prettyText` / `minifiedText` are
     /// untouched, so Copy Pretty / Minified stay clean.
@@ -13,12 +17,20 @@ public extension FormatCanvas {
                                  showInvisibles: Bool = false) -> AttributedString {
         let theme = Theme.theme(for: appearance)
         var result = AttributedString()
-        for token in document.tokens {
+        var index = document.tokens.startIndex
+        while index < document.tokens.endIndex {
+            let kind = document.tokens[index].kind
+            var run = ""
+            run.reserveCapacity(32)
+            while index < document.tokens.endIndex, document.tokens[index].kind == kind {
+                run += document.tokens[index].text
+                index += 1
+            }
             if showInvisibles {
-                appendRevealingInvisibles(token, theme: theme, fontSize: fontSize, into: &result)
+                appendRevealingInvisibles(run, kind: kind, theme: theme, fontSize: fontSize, into: &result)
             } else {
-                var piece = AttributedString(token.text)
-                style(&piece, kind: token.kind, theme: theme, fontSize: fontSize)
+                var piece = AttributedString(run)
+                style(&piece, kind: kind, theme: theme, fontSize: fontSize)
                 result.append(piece)
             }
         }
@@ -42,7 +54,8 @@ public extension FormatCanvas {
         return out
     }
 
-    private static func appendRevealingInvisibles(_ token: SyntaxToken,
+    private static func appendRevealingInvisibles(_ text: String,
+                                                  kind: SyntaxToken.Kind,
                                                   theme: Theme,
                                                   fontSize: CGFloat,
                                                   into result: inout AttributedString) {
@@ -52,19 +65,19 @@ public extension FormatCanvas {
         func flush() {
             guard !buffer.isEmpty else { return }
             var piece = AttributedString(buffer)
-            let kind = bufferIsInvisible ? SyntaxToken.Kind.whitespace : token.kind
-            let rgb = bufferIsInvisible ? theme.secondaryForeground : theme.color(for: token.kind)
+            let flushKind = bufferIsInvisible ? SyntaxToken.Kind.whitespace : kind
+            let rgb = bufferIsInvisible ? theme.secondaryForeground : theme.color(for: kind)
             piece.foregroundColor = Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
             piece.font = .system(
                 size: fontSize,
-                weight: kind == .key || kind == .tagName ? .medium : .regular,
+                weight: flushKind == .key || flushKind == .tagName ? .medium : .regular,
                 design: .monospaced
             )
             result.append(piece)
             buffer.removeAll(keepingCapacity: true)
         }
 
-        for character in token.text {
+        for character in text {
             let (display, isInvisible): (String, Bool) = {
                 switch character {
                 case " ": return ("·", true)

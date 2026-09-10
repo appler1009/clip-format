@@ -245,12 +245,15 @@ struct PopoverView: View {
     private var documentBody: some View {
         if document.isValid {
             ScrollView([.vertical, .horizontal]) {
-                Text(FormatCanvas.attributedString(from: document, appearance: appearance,
-                                                fontSize: CGFloat(preferences.fontSize),
-                                                showInvisibles: preferences.showInvisibles))
-                    .textSelection(.enabled)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                CachedFormattedText(
+                    document: document,
+                    appearance: appearance,
+                    fontSize: CGFloat(preferences.fontSize),
+                    showInvisibles: preferences.showInvisibles
+                )
+                .textSelection(.enabled)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .topLeadingAnchored()
         } else {
@@ -289,5 +292,71 @@ struct PopoverView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+}
+
+/// Builds the attributed preview once per document/style key instead of inside
+/// every SwiftUI `body` pass (font nudges, preference publishes, colour scheme).
+private struct CachedFormattedText: View {
+    let document: FormattedDocument
+    let appearance: Appearance
+    let fontSize: CGFloat
+    let showInvisibles: Bool
+
+    @State private var attributed = AttributedString()
+
+    var body: some View {
+        Text(attributed)
+            .task(id: renderKey) {
+                attributed = FormatCanvas.attributedString(
+                    from: document,
+                    appearance: appearance,
+                    fontSize: fontSize,
+                    showInvisibles: showInvisibles
+                )
+            }
+    }
+
+    private var renderKey: RenderKey {
+        RenderKey(document: document, appearance: appearance,
+                  fontSize: fontSize, showInvisibles: showInvisibles)
+    }
+
+    private struct RenderKey: Equatable {
+        let tokenCount: Int
+        let sourceUTF8: Int
+        let truncated: Bool
+        let kind: DocumentKind
+        let appearance: Appearance
+        let fontSize: CGFloat
+        let showInvisibles: Bool
+        let fingerprint: UInt64
+
+        init(document: FormattedDocument, appearance: Appearance,
+             fontSize: CGFloat, showInvisibles: Bool) {
+            self.tokenCount = document.tokens.count
+            self.sourceUTF8 = document.source.utf8.count
+            self.truncated = document.isTruncated
+            self.kind = document.kind
+            self.appearance = appearance
+            self.fontSize = fontSize
+            self.showInvisibles = showInvisibles
+            // Cheap content identity: lengths of the first and last token plus
+            // a FNV-ish mix of a short source prefix — enough to catch a new
+            // clipboard payload that happens to share token count.
+            var hash: UInt64 = 1_469_598_103_934_662_609
+            let prefix = document.source.utf8.prefix(64)
+            for byte in prefix {
+                hash ^= UInt64(byte)
+                hash = hash &* 1_099_511_628_211
+            }
+            if let first = document.tokens.first?.text.utf8.count {
+                hash ^= UInt64(first) &* 0x9E3779B97F4A7C15
+            }
+            if let last = document.tokens.last?.text.utf8.count {
+                hash ^= UInt64(last) &* 0xBF58476D1CE4E5B9
+            }
+            self.fingerprint = hash
+        }
     }
 }
