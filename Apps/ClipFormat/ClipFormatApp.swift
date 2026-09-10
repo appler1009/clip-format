@@ -7,10 +7,20 @@ struct ClipFormatApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        // The UI lives in a status item, its popover, and a settings window the
-        // delegate owns. This scene exists only to satisfy the SwiftUI
-        // lifecycle; LSUIElement keeps the app out of the Dock.
+        // Satisfies the SwiftUI lifecycle; LSUIElement keeps the app out of the
+        // Dock. Content stays empty on purpose — the real panel is
+        // PreferencesWindowController. Replacing `.appSettings` so ⌘, and the
+        // Settings menu item open that panel instead of this empty scene
+        // (which shows up once a torn-off window makes the app key).
         Settings { EmptyView() }
+            .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings…") {
+                        delegate.openPreferences()
+                    }
+                    .keyboardShortcut(",", modifiers: .command)
+                }
+            }
     }
 }
 
@@ -256,7 +266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func openPreferences() {
+    @objc func openPreferences() {
         popover.performClose(nil)
         preferencesWindow.show(preferences: preferences)
     }
