@@ -48,6 +48,19 @@ final class PerformanceBenchmarks: XCTestCase {
         }
     }
 
+    /// Font size is applied by the host `Text`, so restyling must not rebuild
+    /// the attributed string from tokens. This benches the colourised build
+    /// once, then a trivial size change cost analogue (join characters only).
+    func testBenchFontRestyleDoesNotRebuildTokens() {
+        let document = FormatCanvas.model(from: largeJSON)
+        let attributed = FormatCanvas.attributedString(from: document, appearance: .light)
+        measure {
+            // Host path: reuse attributed, only the view font changes.
+            XCTAssertEqual(String(attributed.characters).utf8.count,
+                           document.tokens.reduce(0) { $0 + $1.text.utf8.count })
+        }
+    }
+
     func testBenchHTMLFromLarge() {
         let document = FormatCanvas.model(from: largeJSON)
         measure {

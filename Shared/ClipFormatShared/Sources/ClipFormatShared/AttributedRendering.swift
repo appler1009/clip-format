@@ -8,12 +8,16 @@ public extension FormatCanvas {
     /// `AttributedString` run (mirroring the HTML renderer) so a pretty-printed
     /// object does not allocate one piece per punctuation mark.
     ///
+    /// Font *size* is deliberately not baked in — hosts apply
+    /// `.font(.system(size:design: .monospaced))` on the `Text`, so ⌘+ / ⌘−
+    /// only restyle the view. Keys / tag names use a strong presentation intent
+    /// for medium weight under that base font.
+    ///
     /// When `showInvisibles` is on, spaces / tabs / line breaks become visible
     /// glyphs in the attributed string only. `prettyText` / `minifiedText` are
     /// untouched, so Copy Pretty / Minified stay clean.
     static func attributedString(from document: FormattedDocument,
                                  appearance: Appearance,
-                                 fontSize: CGFloat = 12,
                                  showInvisibles: Bool = false) -> AttributedString {
         let theme = Theme.theme(for: appearance)
         var result = AttributedString()
@@ -27,10 +31,10 @@ public extension FormatCanvas {
                 index += 1
             }
             if showInvisibles {
-                appendRevealingInvisibles(run, kind: kind, theme: theme, fontSize: fontSize, into: &result)
+                appendRevealingInvisibles(run, kind: kind, theme: theme, into: &result)
             } else {
                 var piece = AttributedString(run)
-                style(&piece, kind: kind, theme: theme, fontSize: fontSize)
+                style(&piece, kind: kind, theme: theme)
                 result.append(piece)
             }
         }
@@ -57,7 +61,6 @@ public extension FormatCanvas {
     private static func appendRevealingInvisibles(_ text: String,
                                                   kind: SyntaxToken.Kind,
                                                   theme: Theme,
-                                                  fontSize: CGFloat,
                                                   into result: inout AttributedString) {
         var buffer = String()
         var bufferIsInvisible = false
@@ -68,11 +71,9 @@ public extension FormatCanvas {
             let flushKind = bufferIsInvisible ? SyntaxToken.Kind.whitespace : kind
             let rgb = bufferIsInvisible ? theme.secondaryForeground : theme.color(for: kind)
             piece.foregroundColor = Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
-            piece.font = .system(
-                size: fontSize,
-                weight: flushKind == .key || flushKind == .tagName ? .medium : .regular,
-                design: .monospaced
-            )
+            if flushKind == .key || flushKind == .tagName {
+                piece.inlinePresentationIntent = .stronglyEmphasized
+            }
             result.append(piece)
             buffer.removeAll(keepingCapacity: true)
         }
@@ -98,15 +99,12 @@ public extension FormatCanvas {
 
     private static func style(_ piece: inout AttributedString,
                               kind: SyntaxToken.Kind,
-                              theme: Theme,
-                              fontSize: CGFloat) {
+                              theme: Theme) {
         let rgb = theme.color(for: kind)
         piece.foregroundColor = Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
-        piece.font = .system(
-            size: fontSize,
-            weight: kind == .key || kind == .tagName ? .medium : .regular,
-            design: .monospaced
-        )
+        if kind == .key || kind == .tagName {
+            piece.inlinePresentationIntent = .stronglyEmphasized
+        }
     }
 }
 

@@ -20,22 +20,37 @@ final class Preferences: ObservableObject {
     }
 
     private let defaults: UserDefaults
+    /// Suppresses App Group writes while loading initial values.
+    private var isLoading = true
+    private var fontSizePersistTask: Task<Void, Never>?
+    private static let fontSizePersistDelay: Duration = .milliseconds(300)
 
     @Published var indentWidth: Int {
-        didSet { defaults.set(indentWidth, forKey: Key.indent) }
+        didSet {
+            guard !isLoading else { return }
+            defaults.set(indentWidth, forKey: Key.indent)
+        }
     }
 
     /// When off, the status item shows plain braces with no ✓/✕ state.
     @Published var showBadge: Bool {
-        didSet { defaults.set(showBadge, forKey: Key.showBadge) }
+        didSet {
+            guard !isLoading else { return }
+            defaults.set(showBadge, forKey: Key.showBadge)
+        }
     }
 
     /// Spaces, tabs, and line breaks as visible glyphs in the preview only.
     @Published var showInvisibles: Bool {
-        didSet { defaults.set(showInvisibles, forKey: Key.showInvisibles) }
+        didSet {
+            guard !isLoading else { return }
+            defaults.set(showInvisibles, forKey: Key.showInvisibles)
+        }
     }
 
     /// Point size of the formatted JSON in the popover. ⌘+ / ⌘− nudge it.
+    /// Publishes immediately for a live preview; App Group persistence is
+    /// debounced so a held key does not rewrite defaults every tick.
     @Published var fontSize: Int {
         didSet {
             let clamped = min(Self.maxFontSize, max(Self.minFontSize, fontSize))
@@ -43,7 +58,8 @@ final class Preferences: ObservableObject {
                 fontSize = clamped
                 return
             }
-            defaults.set(fontSize, forKey: Key.fontSize)
+            guard !isLoading else { return }
+            scheduleFontSizePersist()
         }
     }
 
@@ -74,6 +90,7 @@ final class Preferences: ObservableObject {
         showInvisibles = defaults.bool(forKey: Key.showInvisibles)
         fontSize = defaults.integer(forKey: Key.fontSize)
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        isLoading = false
     }
 
     /// Copies indent / font / badge out of the old per-app defaults so a
@@ -102,6 +119,24 @@ final class Preferences: ObservableObject {
 
     func decreaseFontSize() {
         fontSize = max(Self.minFontSize, fontSize - 1)
+    }
+
+    /// Writes any debounced font size now — call on quit so the last ⌘+ is kept.
+    func flushPendingWrites() {
+        fontSizePersistTask?.cancel()
+        fontSizePersistTask = nil
+        defaults.set(fontSize, forKey: Key.fontSize)
+    }
+
+    private func scheduleFontSizePersist() {
+        fontSizePersistTask?.cancel()
+        let size = fontSize
+        fontSizePersistTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.fontSizePersistDelay)
+            guard !Task.isCancelled else { return }
+            defaults.set(size, forKey: Key.fontSize)
+            fontSizePersistTask = nil
+        }
     }
 
     /// Picks up changes made outside the app (System Settings → Login Items).

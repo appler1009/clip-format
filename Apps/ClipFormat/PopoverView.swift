@@ -295,8 +295,8 @@ struct PopoverView: View {
     }
 }
 
-/// Builds the attributed preview once per document/style key instead of inside
-/// every SwiftUI `body` pass (font nudges, preference publishes, colour scheme).
+/// Builds the colourised preview once per document/appearance — font size is
+/// applied by the `Text` so ⌘+ / ⌘− never rebuild the attributed string.
 private struct CachedFormattedText: View {
     let document: FormattedDocument
     let appearance: Appearance
@@ -307,19 +307,18 @@ private struct CachedFormattedText: View {
 
     var body: some View {
         Text(attributed)
+            .font(.system(size: fontSize, design: .monospaced))
             .task(id: renderKey) {
                 attributed = FormatCanvas.attributedString(
                     from: document,
                     appearance: appearance,
-                    fontSize: fontSize,
                     showInvisibles: showInvisibles
                 )
             }
     }
 
     private var renderKey: RenderKey {
-        RenderKey(document: document, appearance: appearance,
-                  fontSize: fontSize, showInvisibles: showInvisibles)
+        RenderKey(document: document, appearance: appearance, showInvisibles: showInvisibles)
     }
 
     private struct RenderKey: Equatable {
@@ -328,18 +327,15 @@ private struct CachedFormattedText: View {
         let truncated: Bool
         let kind: DocumentKind
         let appearance: Appearance
-        let fontSize: CGFloat
         let showInvisibles: Bool
         let fingerprint: UInt64
 
-        init(document: FormattedDocument, appearance: Appearance,
-             fontSize: CGFloat, showInvisibles: Bool) {
+        init(document: FormattedDocument, appearance: Appearance, showInvisibles: Bool) {
             self.tokenCount = document.tokens.count
             self.sourceUTF8 = document.source.utf8.count
             self.truncated = document.isTruncated
             self.kind = document.kind
             self.appearance = appearance
-            self.fontSize = fontSize
             self.showInvisibles = showInvisibles
             // Cheap content identity: lengths of the first and last token plus
             // a FNV-ish mix of a short source prefix — enough to catch a new

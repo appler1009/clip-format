@@ -96,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         monitor.stop()
         removeDismissMonitor()
+        preferences.flushPendingWrites()
         // windowDidMove has no "ended" sibling, so a window that was dragged
         // and never resized is recorded here.
         detachedWindow?.persistFrameUnlessFullScreen()
