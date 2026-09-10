@@ -4,6 +4,14 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.3
+
+- Escape dismisses the status-item popover (the torn-off window already did).
+- Faster clipboard → parse → preview path: budgeted tokenization, coalesced
+  attributed runs, cached popover styling, large parses off the main thread,
+  no forced re-parse when the pasteboard has not changed, and ⌘+ / ⌘− restyle
+  without rebuilding the colourised text.
+
 ## 0.5.2
 
 - ⌘, from a torn-off clipboard window opens the real Settings panel instead of
