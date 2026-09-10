@@ -97,19 +97,25 @@ public enum FormatCanvas {
         // comment rather than at the fault.
         // Cheap and deliberately loose: a marker inside a string would also
         // match, but this only decides which error is shown, never whether the
-        // source is valid.
-        let isJSONCShaped = documentError != nil || trimmed.contains("//") || trimmed.contains("/*")
-        do {
-            let value = try JSONParser.parse(trimmed, options: .jsonc)
-            if value.isContainer {
-                return FormattedDocument(source: trimmed, indent: indent,
-                                          records: [value], kind: .jsonc, errorMessage: nil)
+        // source is valid. Skip the parse entirely for plain prose — a failing
+        // JSONC walk over megabytes of "not json" is wasted work. No `/` at all
+        // means no comment marker is possible, so the UTF-8 byte check is the
+        // fast reject for ordinary clipboard text.
+        let isJSONCShaped = documentError != nil
+            || (trimmed.utf8.contains(0x2F) && (trimmed.contains("//") || trimmed.contains("/*")))
+        if isJSONCShaped {
+            do {
+                let value = try JSONParser.parse(trimmed, options: .jsonc)
+                if value.isContainer {
+                    return FormattedDocument(source: trimmed, indent: indent,
+                                              records: [value], kind: .jsonc, errorMessage: nil)
+                }
+            } catch let commentError as JSONParseError {
+                return FormattedDocument(source: trimmed, indent: indent, value: nil,
+                                          errorMessage: commentError.message)
+            } catch {
+                // Not JSON in any reading; fall through to the document's own error.
             }
-        } catch let commentError as JSONParseError where isJSONCShaped {
-            return FormattedDocument(source: trimmed, indent: indent, value: nil,
-                                      errorMessage: commentError.message)
-        } catch {
-            // Not JSON in any reading; fall through to the document's own error.
         }
 
         // A parse error from a JSON-shaped source stays a JSON error. Plain text

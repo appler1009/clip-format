@@ -39,7 +39,7 @@ public struct FormattedDocument: Sendable {
     /// Syntax-classified formatted output, empty when the source did not parse
     /// as anything.
     /// Computed once at parse time — SwiftUI re-evaluates `body` far too often
-    /// to re-run the printer per frame.
+    /// to re-run the printer per frame. Capped at `FormatCanvas.renderCharacterLimit`.
     public let tokens: [SyntaxToken]
 
     public var isValid: Bool { !records.isEmpty || !xmlNodes.isEmpty }
@@ -48,8 +48,6 @@ public struct FormattedDocument: Sendable {
     /// comments. Nil only for JSON Lines, which genuinely has no one value;
     /// use `records` there.
     public var value: JSONValue? { kind == .lineDelimited ? nil : records.first }
-
-
 
     /// How many lines parsed, for the "17 records" the hosts show.
     public var recordCount: Int { records.count }
@@ -83,15 +81,10 @@ public struct FormattedDocument: Sendable {
             self.isTruncated = isTruncated
             return
         }
-        let printed = XMLPrinter.tokens(for: xmlNodes, indent: indent)
-        let length = printed.reduce(0) { $0 + $1.text.count }
-        if length > FormatCanvas.renderCharacterLimit {
-            self.tokens = FormatCanvas.truncate(printed, toCharacters: FormatCanvas.renderCharacterLimit)
-            self.isTruncated = true
-        } else {
-            self.tokens = printed
-            self.isTruncated = isTruncated
-        }
+        let printed = XMLPrinter.tokens(for: xmlNodes, indent: indent,
+                                        characterLimit: FormatCanvas.renderCharacterLimit)
+        self.tokens = printed.tokens
+        self.isTruncated = isTruncated || printed.isTruncated
     }
 
     public init(source: String, indent: Int, records: [JSONValue], kind: DocumentKind,
@@ -110,36 +103,53 @@ public struct FormattedDocument: Sendable {
             self.isTruncated = isTruncated
             return
         }
-        let printed = Self.tokens(for: records, kind: kind, indent: indent)
-        let length = printed.reduce(0) { $0 + $1.text.count }
-        if length > FormatCanvas.renderCharacterLimit {
-            self.tokens = FormatCanvas.truncate(printed, toCharacters: FormatCanvas.renderCharacterLimit)
-            self.isTruncated = true
-        } else {
-            self.tokens = printed
-            self.isTruncated = isTruncated
-        }
+        let printed = Self.tokens(for: records, kind: kind, indent: indent,
+                                  characterLimit: FormatCanvas.renderCharacterLimit)
+        self.tokens = printed.tokens
+        self.isTruncated = isTruncated || printed.isTruncated
     }
 
     /// A blank line between records keeps a JSON Lines file readable once each
     /// record is expanded over several lines of its own.
-    private static func tokens(for records: [JSONValue], kind: DocumentKind, indent: Int) -> [SyntaxToken] {
+    private static func tokens(for records: [JSONValue], kind: DocumentKind, indent: Int,
+                               characterLimit: Int) -> (tokens: [SyntaxToken], isTruncated: Bool) {
         guard kind == .lineDelimited else {
-            return PrettyPrinter.tokens(for: records[0], indent: indent)
+            return PrettyPrinter.tokens(for: records[0], indent: indent, characterLimit: characterLimit)
         }
         var tokens: [SyntaxToken] = []
+        tokens.reserveCapacity(records.count * 8)
+        var count = 0
         for (offset, record) in records.enumerated() {
-            if offset > 0 { tokens.append(SyntaxToken(kind: .whitespace, text: "\n\n")) }
-            tokens.append(contentsOf: PrettyPrinter.tokens(for: record, indent: indent))
+            if offset > 0 {
+                let gap = "\n\n"
+                if count + gap.count > characterLimit {
+                    tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
+                    tokens.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
+                    return (tokens, true)
+                }
+                count += gap.count
+                tokens.append(SyntaxToken(kind: .whitespace, text: gap))
+            }
+            let remaining = max(0, characterLimit - count)
+            let printed = PrettyPrinter.tokens(for: record, indent: indent, characterLimit: remaining)
+            tokens.append(contentsOf: printed.tokens)
+            if printed.isTruncated { return (tokens, true) }
+            count += printed.tokens.reduce(0) { $0 + $1.text.count }
         }
-        return tokens
+        return (tokens, false)
     }
 
+    /// Formatted text for Copy Pretty. Uses the display token stream when it
+    /// holds the whole document; regenerates from the AST when the preview was
+    /// truncated so Copy still yields everything.
     public var prettyText: String? {
         if kind == .xml {
-            return xmlNodes.isEmpty ? nil : XMLPrinter.pretty(xmlNodes, indent: indent)
+            guard !xmlNodes.isEmpty else { return nil }
+            if !isTruncated { return tokens.map(\.text).joined() }
+            return XMLPrinter.pretty(xmlNodes, indent: indent)
         }
         guard !records.isEmpty else { return nil }
+        if !isTruncated { return tokens.map(\.text).joined() }
         guard kind == .lineDelimited else { return PrettyPrinter.pretty(records[0], indent: indent) }
         return records.map { PrettyPrinter.pretty($0, indent: indent) }.joined(separator: "\n\n")
     }

@@ -32,68 +32,102 @@ public struct SyntaxToken: Equatable, Sendable {
 
 public enum PrettyPrinter {
     /// Formats `value` as an indented token stream.
-    public static func tokens(for value: JSONValue, indent: Int) -> [SyntaxToken] {
+    ///
+    /// Pass `characterLimit` to stop once the printed length would exceed it —
+    /// callers that only show a preview (the popover / Quick Look) use this so
+    /// a multi‑megabyte tree never materialises a full token array first.
+    public static func tokens(for value: JSONValue, indent: Int,
+                              characterLimit: Int = .max) -> (tokens: [SyntaxToken], isTruncated: Bool) {
         var tokens: [SyntaxToken] = []
-        emit(value, indent: indent, level: 0, into: &tokens)
-        return tokens
+        tokens.reserveCapacity(min(256, max(16, characterLimit / 8)))
+        var count = 0
+        var truncated = false
+        emit(value, indent: indent, level: 0, limit: characterLimit,
+             count: &count, truncated: &truncated, into: &tokens)
+        if truncated {
+            tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
+            tokens.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
+        }
+        return (tokens, truncated)
     }
 
     /// Formats `value` as indented plain text.
     public static func pretty(_ value: JSONValue, indent: Int) -> String {
-        tokens(for: value, indent: indent).map(\.text).joined()
+        tokens(for: value, indent: indent).tokens.map(\.text).joined()
     }
 
     /// Formats `value` with no insignificant whitespace.
     public static func minified(_ value: JSONValue) -> String {
         var out = ""
+        out.reserveCapacity(64)
         emitMinified(value, into: &out)
         return out
     }
 
-    private static func emit(_ value: JSONValue, indent: Int, level: Int, into tokens: inout [SyntaxToken]) {
+    private static func emit(_ value: JSONValue, indent: Int, level: Int, limit: Int,
+                             count: inout Int, truncated: inout Bool,
+                             into tokens: inout [SyntaxToken]) {
+        guard !truncated else { return }
+
+        func append(_ kind: SyntaxToken.Kind, _ text: String) {
+            guard !truncated else { return }
+            let next = count + text.count
+            if next > limit {
+                truncated = true
+                return
+            }
+            count = next
+            tokens.append(SyntaxToken(kind: kind, text: text))
+        }
+
         switch value {
         case .null:
-            tokens.append(SyntaxToken(kind: .null, text: "null"))
+            append(.null, "null")
         case .bool(let flag):
-            tokens.append(SyntaxToken(kind: .bool, text: flag ? "true" : "false"))
+            append(.bool, flag ? "true" : "false")
         case .number(let literal):
-            tokens.append(SyntaxToken(kind: .number, text: literal))
+            append(.number, literal)
         case .string(let text):
-            tokens.append(SyntaxToken(kind: .string, text: quote(text)))
+            append(.string, quote(text))
         case .array(let elements):
             guard !elements.isEmpty else {
-                tokens.append(SyntaxToken(kind: .punctuation, text: "[]"))
+                append(.punctuation, "[]")
                 return
             }
-            tokens.append(SyntaxToken(kind: .punctuation, text: "["))
+            append(.punctuation, "[")
             for (offset, element) in elements.enumerated() {
-                if offset > 0 { tokens.append(SyntaxToken(kind: .punctuation, text: ",")) }
-                newline(indent: indent, level: level + 1, into: &tokens)
-                emit(element, indent: indent, level: level + 1, into: &tokens)
+                if truncated { return }
+                if offset > 0 { append(.punctuation, ",") }
+                newline(indent: indent, level: level + 1, append: append)
+                emit(element, indent: indent, level: level + 1, limit: limit,
+                     count: &count, truncated: &truncated, into: &tokens)
             }
-            newline(indent: indent, level: level, into: &tokens)
-            tokens.append(SyntaxToken(kind: .punctuation, text: "]"))
+            newline(indent: indent, level: level, append: append)
+            append(.punctuation, "]")
         case .object(let members):
             guard !members.isEmpty else {
-                tokens.append(SyntaxToken(kind: .punctuation, text: "{}"))
+                append(.punctuation, "{}")
                 return
             }
-            tokens.append(SyntaxToken(kind: .punctuation, text: "{"))
+            append(.punctuation, "{")
             for (offset, member) in members.enumerated() {
-                if offset > 0 { tokens.append(SyntaxToken(kind: .punctuation, text: ",")) }
-                newline(indent: indent, level: level + 1, into: &tokens)
-                tokens.append(SyntaxToken(kind: .key, text: quote(member.key)))
-                tokens.append(SyntaxToken(kind: .punctuation, text: ":"))
-                tokens.append(SyntaxToken(kind: .whitespace, text: " "))
-                emit(member.value, indent: indent, level: level + 1, into: &tokens)
+                if truncated { return }
+                if offset > 0 { append(.punctuation, ",") }
+                newline(indent: indent, level: level + 1, append: append)
+                append(.key, quote(member.key))
+                append(.punctuation, ":")
+                append(.whitespace, " ")
+                emit(member.value, indent: indent, level: level + 1, limit: limit,
+                     count: &count, truncated: &truncated, into: &tokens)
             }
-            newline(indent: indent, level: level, into: &tokens)
-            tokens.append(SyntaxToken(kind: .punctuation, text: "}"))
+            newline(indent: indent, level: level, append: append)
+            append(.punctuation, "}")
         }
     }
 
-    private static func newline(indent: Int, level: Int, into tokens: inout [SyntaxToken]) {
-        tokens.append(SyntaxToken(kind: .whitespace, text: "\n" + String(repeating: " ", count: indent * level)))
+    private static func newline(indent: Int, level: Int,
+                                append: (SyntaxToken.Kind, String) -> Void) {
+        append(.whitespace, "\n" + String(repeating: " ", count: indent * level))
     }
 
     private static func emitMinified(_ value: JSONValue, into out: inout String) {
@@ -125,6 +159,7 @@ public enum PrettyPrinter {
     /// literal — emoji and CJK read better than their \u escapes in a preview.
     static func quote(_ text: String) -> String {
         var out = "\""
+        out.reserveCapacity(text.count + 2)
         for scalar in text.unicodeScalars {
             switch scalar {
             case "\"": out += "\\\""

@@ -86,7 +86,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        monitor.refresh(force: true)
+        // Cheap changeCount check — do not force a re-parse of unchanged
+        // clipboard contents every time the app becomes key.
+        monitor.refresh()
         // The user may have removed us from Login Items while we were inactive.
         preferences.refreshLaunchAtLoginStatus()
     }
@@ -94,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         monitor.stop()
         removeDismissMonitor()
+        preferences.flushPendingWrites()
         // windowDidMove has no "ended" sibling, so a window that was dragged
         // and never resized is recorded here.
         detachedWindow?.persistFrameUnlessFullScreen()
@@ -180,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// same monitor, so a click on the status item while it is open should
     /// bring it forward rather than open a second copy of the same thing.
     private func focusDetachedWindow(_ window: DetachedJSONWindow) {
-        monitor.refresh(force: true)
+        monitor.refresh()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
@@ -195,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         guard let button = statusItem.button else { return }
-        monitor.refresh(force: true)
+        monitor.refresh()
         // Only a popover that has been torn off needs replacing; before that
         // the same instance shows content perfectly well, and rebuilding the
         // hosting tree on every click would be waste.

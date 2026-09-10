@@ -3,18 +3,28 @@ import Foundation
 /// Formats `XMLValue` into the same token stream the JSON printer produces, so
 /// both hosts render XML through the code they already had.
 public enum XMLPrinter {
-    public static func tokens(for nodes: [XMLValue], indent: Int) -> [SyntaxToken] {
+    public static func tokens(for nodes: [XMLValue], indent: Int,
+                              characterLimit: Int = .max) -> (tokens: [SyntaxToken], isTruncated: Bool) {
         var tokens: [SyntaxToken] = []
+        tokens.reserveCapacity(64)
+        var count = 0
+        var truncated = false
         let significant = nodes.filter { !$0.isInsignificantWhitespace }
         for (offset, node) in significant.enumerated() {
-            if offset > 0 { tokens.append(SyntaxToken(kind: .whitespace, text: "\n")) }
-            emit(node, indent: indent, level: 0, into: &tokens)
+            if truncated { break }
+            if offset > 0 { append(.whitespace, "\n", limit: characterLimit, count: &count, truncated: &truncated, into: &tokens) }
+            emit(node, indent: indent, level: 0, limit: characterLimit,
+                 count: &count, truncated: &truncated, into: &tokens)
         }
-        return tokens
+        if truncated {
+            tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
+            tokens.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
+        }
+        return (tokens, truncated)
     }
 
     public static func pretty(_ nodes: [XMLValue], indent: Int) -> String {
-        tokens(for: nodes, indent: indent).map(\.text).joined()
+        tokens(for: nodes, indent: indent).tokens.map(\.text).joined()
     }
 
     /// One line, with the whitespace between elements dropped. Text inside an
@@ -22,67 +32,91 @@ public enum XMLPrinter {
     /// the README's note about `xml:space="preserve"`.
     public static func minified(_ nodes: [XMLValue]) -> String {
         var out = ""
+        out.reserveCapacity(64)
         for node in nodes where !node.isInsignificantWhitespace {
             emitMinified(node, into: &out)
         }
         return out
     }
 
-    private static func emit(_ node: XMLValue, indent: Int, level: Int, into tokens: inout [SyntaxToken]) {
+    private static func append(_ kind: SyntaxToken.Kind, _ text: String, limit: Int,
+                               count: inout Int, truncated: inout Bool,
+                               into tokens: inout [SyntaxToken]) {
+        guard !truncated else { return }
+        let next = count + text.count
+        if next > limit {
+            truncated = true
+            return
+        }
+        count = next
+        tokens.append(SyntaxToken(kind: kind, text: text))
+    }
+
+    private static func emit(_ node: XMLValue, indent: Int, level: Int, limit: Int,
+                             count: inout Int, truncated: inout Bool,
+                             into tokens: inout [SyntaxToken]) {
+        guard !truncated else { return }
         let pad = String(repeating: " ", count: indent * level)
+
+        func put(_ kind: SyntaxToken.Kind, _ text: String) {
+            append(kind, text, limit: limit, count: &count, truncated: &truncated, into: &tokens)
+        }
+
         switch node {
         case .text(let value):
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
-            tokens.append(SyntaxToken(kind: .whitespace, text: pad))
-            tokens.append(SyntaxToken(kind: .text, text: escape(trimmed)))
+            put(.whitespace, pad)
+            put(.text, escape(trimmed))
 
         case .comment(let value):
-            tokens.append(SyntaxToken(kind: .whitespace, text: pad))
-            tokens.append(SyntaxToken(kind: .comment, text: "<!--\(value)-->"))
+            put(.whitespace, pad)
+            put(.comment, "<!--\(value)-->")
 
         case .processingInstruction(let target, let data):
-            tokens.append(SyntaxToken(kind: .whitespace, text: pad))
-            tokens.append(SyntaxToken(kind: .punctuation, text: "<?"))
-            tokens.append(SyntaxToken(kind: .tagName, text: target))
+            put(.whitespace, pad)
+            put(.punctuation, "<?")
+            put(.tagName, target)
             if let data, !data.isEmpty {
-                tokens.append(SyntaxToken(kind: .whitespace, text: " "))
-                tokens.append(SyntaxToken(kind: .attributeName, text: data))
+                put(.whitespace, " ")
+                put(.attributeName, data)
             }
-            tokens.append(SyntaxToken(kind: .punctuation, text: "?>"))
+            put(.punctuation, "?>")
 
         case .element(let name, let attributes, let children):
-            tokens.append(SyntaxToken(kind: .whitespace, text: pad))
-            tokens.append(SyntaxToken(kind: .punctuation, text: "<"))
-            tokens.append(SyntaxToken(kind: .tagName, text: name))
+            put(.whitespace, pad)
+            put(.punctuation, "<")
+            put(.tagName, name)
             for attribute in attributes {
-                tokens.append(SyntaxToken(kind: .whitespace, text: " "))
-                tokens.append(SyntaxToken(kind: .attributeName, text: attribute.name))
-                tokens.append(SyntaxToken(kind: .punctuation, text: "="))
-                tokens.append(SyntaxToken(kind: .string, text: "\"\(escape(attribute.value))\""))
+                put(.whitespace, " ")
+                put(.attributeName, attribute.name)
+                put(.punctuation, "=")
+                put(.string, "\"\(escape(attribute.value))\"")
             }
 
             let significant = children.filter { !$0.isInsignificantWhitespace }
             guard !significant.isEmpty else {
-                tokens.append(SyntaxToken(kind: .punctuation, text: "/>"))
+                put(.punctuation, "/>")
                 return
             }
-            tokens.append(SyntaxToken(kind: .punctuation, text: ">"))
+            put(.punctuation, ">")
 
             // An element holding only text stays on one line: <title>Hi</title>
             // reads worse broken across three.
             if significant.count == 1, case .text(let value) = significant[0] {
-                tokens.append(SyntaxToken(kind: .text, text: escape(value.trimmingCharacters(in: .whitespacesAndNewlines))))
+                put(.text, escape(value.trimmingCharacters(in: .whitespacesAndNewlines)))
             } else {
                 for child in significant {
-                    tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
-                    emit(child, indent: indent, level: level + 1, into: &tokens)
+                    if truncated { return }
+                    put(.whitespace, "\n")
+                    emit(child, indent: indent, level: level + 1, limit: limit,
+                         count: &count, truncated: &truncated, into: &tokens)
                 }
-                tokens.append(SyntaxToken(kind: .whitespace, text: "\n" + pad))
+                put(.whitespace, "\n" + pad)
             }
-            tokens.append(SyntaxToken(kind: .punctuation, text: "</"))
-            tokens.append(SyntaxToken(kind: .tagName, text: name))
-            tokens.append(SyntaxToken(kind: .punctuation, text: ">"))
+            put(.punctuation, "</")
+            put(.tagName, name)
+            put(.punctuation, ">")
         }
     }
 
