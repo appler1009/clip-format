@@ -222,13 +222,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installKeyMonitor()
     }
 
-    /// ⌘+ / ⌘− for both surfaces. An agent app has no menu bar to hang the
-    /// commands off, and the monitor has to outlive the popover because the
-    /// torn-off window needs them too.
+    /// ⌘+ / ⌘− for both surfaces, and Escape to dismiss the popover. An agent
+    /// app has no menu bar to hang the commands off, and the monitor has to
+    /// outlive the popover because the torn-off window needs the font keys too.
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleFontSizeKey(event) ?? event
+            self?.handleKeyEvent(event) ?? event
         }
     }
 
@@ -241,7 +241,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.keyMonitor = nil
     }
 
-    private func handleFontSizeKey(_ event: NSEvent) -> NSEvent? {
+    private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
+        // Escape closes the popover. The torn-off window handles Escape itself
+        // via `cancelOperation` (and uses it to leave full screen first).
+        if popover.isShown, event.keyCode == 53 {
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if flags.isEmpty {
+                popover.performClose(nil)
+                return nil
+            }
+        }
+
         guard popover.isShown || detachedWindow?.isKeyWindow == true else { return event }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard flags.contains(.command),
