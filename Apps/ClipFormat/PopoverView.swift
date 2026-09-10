@@ -72,8 +72,11 @@ struct PopoverView: View {
         }
         // Sizing belongs to whoever is hosting the view: the popover pins it
         // to contentSize, and the torn-off window lets the user resize.
+        // Top-leading alignment keeps the action bar pinned when the clipboard
+        // is empty and the body collapses — default `.center` floats it mid-air.
         .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity,
-               minHeight: 180, idealHeight: 420, maxHeight: .infinity)
+               minHeight: 180, idealHeight: 420, maxHeight: .infinity,
+               alignment: .topLeading)
         .background(theme.background.color)
     }
 
@@ -84,6 +87,7 @@ struct PopoverView: View {
             documentBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var windowBody: some View {
@@ -96,6 +100,7 @@ struct PopoverView: View {
             documentBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // fullSizeContentView already draws under the title bar; ignore the
         // safe-area inset so the actions sit level with the traffic lights
         // instead of one row below them.
@@ -199,21 +204,28 @@ struct PopoverView: View {
     /// Leading grabber. AppKit already tears the popover off when the user
     /// drags it; this only says where to start.
     private var detachHandle: some View {
-        Capsule()
-            .fill(theme.secondaryForeground.color.opacity(0.4))
-            .frame(width: 36, height: 4)
-            .frame(width: 44, height: 28, alignment: .center)
-            .contentShape(Rectangle())
-            .help("Drag to tear off into a window")
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.openHand.push()
-                } else {
-                    NSCursor.pop()
-                }
+        HStack(spacing: 3) {
+            VStack(spacing: 3) { detachHandleDot; detachHandleDot; detachHandleDot }
+            VStack(spacing: 3) { detachHandleDot; detachHandleDot; detachHandleDot }
+        }
+        .frame(width: 44, height: 28, alignment: .center)
+        .contentShape(Rectangle())
+        .help("Drag to tear off into a window")
+        .onHover { hovering in
+            if hovering {
+                NSCursor.openHand.push()
+            } else {
+                NSCursor.pop()
             }
-            .accessibilityLabel("Tear off")
-            .accessibilityHint("Drag to keep this view open as a window")
+        }
+        .accessibilityLabel("Tear off")
+        .accessibilityHint("Drag to keep this view open as a window")
+    }
+
+    private var detachHandleDot: some View {
+        Circle()
+            .fill(theme.secondaryForeground.color.opacity(0.4))
+            .frame(width: 3.5, height: 3.5)
     }
 
     @ViewBuilder

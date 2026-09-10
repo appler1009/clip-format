@@ -4,6 +4,13 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.1
+
+- The tear-off grabber is a 2×3 six-dot grip instead of a flat horizontal
+  capsule, so it reads as drag-to-detach rather than swipe vertically.
+- With an empty clipboard the action bar stays at the top of the popover
+  instead of floating in the middle of the empty pane.
+
 ## 0.5.0
 
 - Settings → Formatting can show invisible characters: spaces as `·`, tabs as
