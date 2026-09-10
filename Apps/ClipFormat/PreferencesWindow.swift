@@ -3,10 +3,10 @@ import SwiftUI
 
 /// Hosts `PreferencesView` in a window the app owns.
 ///
-/// SwiftUI's `Settings` scene is reached through `showSettingsWindow:`, a
-/// private selector whose name has changed across releases and which does
-/// nothing at all here. An agent app has no menu bar to open Settings from
-/// either, so owning the window is both simpler and more predictable.
+/// SwiftUI requires a `Settings` scene for the app lifecycle, but that scene
+/// is left empty here: `showSettingsWindow:` is unreliable in an agent app,
+/// and ⌘, / the Settings menu item are redirected to this controller via
+/// `CommandGroup(replacing: .appSettings)` in `ClipFormatApp`.
 @MainActor
 final class PreferencesWindowController {
     private var window: NSWindow?
