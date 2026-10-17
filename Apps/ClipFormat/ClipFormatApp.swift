@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateIcon(isValid: Bool? = nil, showBadge: Bool? = nil) {
         let showBadge = showBadge ?? preferences.showBadge
         let isValid = isValid ?? monitor.document.isValid
-        let state: StatusItemIcon.State = showBadge ? (isValid ? .valid : .invalid) : .neutral
+        let state: StatusItemIcon.State = showBadge && isValid ? .valid : .neutral
         statusItem?.button?.image = StatusItemIcon.image(for: state)
     }
 

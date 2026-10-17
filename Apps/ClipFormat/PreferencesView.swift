@@ -25,7 +25,7 @@ struct PreferencesView: View {
             }
 
             Section("Menu bar") {
-                Toggle("Show ✓ / ✕ badge", isOn: $preferences.showBadge)
+                Toggle("Show ✓ badge", isOn: $preferences.showBadge)
                 Text("Off shows plain braces that follow the menu bar’s appearance.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)

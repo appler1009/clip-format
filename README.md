@@ -56,7 +56,7 @@ Right-click the menu-bar icon → Preferences.
 
 - **Indent** — 2, 4, or 8 spaces (popover and Quick Look)
 - **Font size** — 9–28 pt for the popover JSON; ⌘+ / ⌘− also change it while the popover is open. Quick Look uses the last saved size on the next Spacebar.
-- **Show ✓ / ✕ badge** — off gives you plain template braces
+- **Show ✓ badge** — a green ✓ when the clipboard holds something ClipFormat can format; off gives you plain template braces
 - **Launch at login** — via `SMAppService`
 
 ## Quick Look not updating?
