@@ -4,6 +4,12 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.4
+
+- The menu-bar icon no longer shows a red ✕ when the clipboard isn't something
+  ClipFormat can format; it stays plain braces. The green ✓ still appears for
+  JSON and anything else the formatter recognises.
+
 ## 0.5.3
 
 - Escape dismisses the status-item popover (the torn-off window already did).
