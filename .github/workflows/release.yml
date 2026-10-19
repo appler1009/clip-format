@@ -15,7 +15,10 @@ permissions:
 jobs:
   release:
     name: Build and publish
-    runs-on: macos-latest
+    # The Tart VM runner on the maintainer's Mac mini; set the repository variable CI_RUNS_ON to
+    # '"macos-latest"' (with the quotes) to release from a GitHub-hosted runner instead.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","tart"]') }}
+    timeout-minutes: 45
     # The `secrets` context is not available in a step-level `if`, so the one
     # value the conditional needs is hoisted to the job environment.
     env:
@@ -38,8 +41,22 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # GitHub-hosted images ship Homebrew; the Tart image does not, so fall back to the release binary.
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          if ! command -v xcodegen >/dev/null; then
+            if command -v brew >/dev/null; then
+              brew install xcodegen
+            else
+              DIR="$RUNNER_TEMP/xcodegen"
+              mkdir -p "$DIR"
+              curl -fsSL --retry 5 -o "$DIR/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip
+              unzip -q "$DIR/xcodegen.zip" -d "$DIR"
+              echo "$DIR/xcodegen/bin" >> "$GITHUB_PATH"
+            fi
+          fi
+          export PATH="$RUNNER_TEMP/xcodegen/xcodegen/bin:$PATH"
+          xcodegen --version
 
       - name: Test shared core
         working-directory: Shared/ClipFormatShared
@@ -86,6 +103,20 @@ jobs:
           if [ ! -s release-notes.md ]; then
             echo "ClipFormat $version" > release-notes.md
           fi
+
+      # GitHub-hosted images include the GitHub CLI; the Tart image does not. Download the official build
+      # when it is missing.
+      - name: Make sure the GitHub CLI is available
+        run: |
+          if ! command -v gh >/dev/null; then
+            TAG="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | grep -m1 '"tag_name"' | sed -E 's/.*"(v[^"]+)".*/\1/')"
+            DIR="$RUNNER_TEMP/gh"
+            mkdir -p "$DIR"
+            curl -fsSL -o "$DIR/gh.zip" "https://github.com/cli/cli/releases/download/$TAG/gh_${TAG#v}_macOS_arm64.zip"
+            unzip -q "$DIR/gh.zip" -d "$DIR"
+            echo "$DIR/gh_${TAG#v}_macOS_arm64/bin" >> "$GITHUB_PATH"
+          fi
+          gh --version | sed -n 1p
 
       - name: Publish release
         env:
