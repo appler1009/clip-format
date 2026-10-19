@@ -32,7 +32,8 @@ final class Preferences: ObservableObject {
         }
     }
 
-    /// When off, the status item shows plain braces with no ✓/✕ state.
+    /// When off, the status item always shows plain braces. When on, it shows a ✓
+    /// only while the clipboard holds something ClipFormat can format.
     @Published var showBadge: Bool {
         didSet {
             guard !isLoading else { return }
