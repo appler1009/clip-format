@@ -8,7 +8,7 @@ Still free, still no paywall.
 
 ## What it does
 
-- **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds something this app can format, a red ✕ when it holds JSON or XML that does not parse.
+- **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds something this app can format; plain braces when it holds anything else.
 - **Click for the formatted view** — syntax-coloured, selectable, scrollable, with **Copy Pretty** and **Copy Minified**.
 - **Tear it off** — drag the popover away from the menu bar and it becomes a window that keeps following the clipboard. Resizable, remembers its frame, Escape to close.
 - **Quick Look for `.json`, `.jsonc`, `.jsonl`, `.ndjson` and `.xml` files** — Spacebar in Finder renders through the same code the popover uses.
