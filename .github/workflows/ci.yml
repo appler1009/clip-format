@@ -12,12 +12,30 @@ concurrency:
 jobs:
   test:
     name: Test and build
-    runs-on: macos-latest
+    # The Tart VM runner on the maintainer's Mac mini. If it is offline, set the repository variable
+    # CI_RUNS_ON to '"macos-latest"' (with the quotes) to build on a GitHub-hosted runner instead.
+    # Pull requests from forks never run on it: repository variables aren't passed to them, so they'd fall through.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'macos-latest' || fromJSON(vars.CI_RUNS_ON || '["self-hosted","tart"]') }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
+      # GitHub-hosted images ship Homebrew; the Tart image does not, so fall back to the release binary.
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          if ! command -v xcodegen >/dev/null; then
+            if command -v brew >/dev/null; then
+              brew install xcodegen
+            else
+              DIR="$RUNNER_TEMP/xcodegen"
+              mkdir -p "$DIR"
+              curl -fsSL --retry 5 -o "$DIR/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip
+              unzip -q "$DIR/xcodegen.zip" -d "$DIR"
+              echo "$DIR/xcodegen/bin" >> "$GITHUB_PATH"
+            fi
+          fi
+          export PATH="$RUNNER_TEMP/xcodegen/xcodegen/bin:$PATH"
+          xcodegen --version
 
       - name: Test shared core
         working-directory: Shared/ClipFormatShared
