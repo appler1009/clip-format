@@ -90,6 +90,18 @@ jobs:
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: Scripts/package.sh "${{ steps.version.outputs.version }}" "${{ github.run_number }}"
 
+      # Manual runs are dry runs: keep what was built so it can be inspected without publishing.
+      - name: Upload the build (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          retention-days: 7
+
       - name: Extract release notes
         id: notes
         run: |
