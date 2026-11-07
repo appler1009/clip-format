@@ -65,6 +65,25 @@ xcodebuild \
   build
 
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
+  echo "==> Signing Sparkle's helpers"
+  # Xcode signs Sparkle.framework but not what is nested inside it, and the
+  # notary service rejects nested code that isn't ours, hardened and
+  # timestamped. Innermost first; the framework and the app are sealed over
+  # their contents, so each is signed again after what it holds. The XPC
+  # services keep their own entitlements (the app is sandboxed).
+  SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+  sign_nested() {
+    codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
+      --sign "$SIGNING_IDENTITY" "$1"
+  }
+  while IFS= read -r inner; do sign_nested "$inner"; done < <(
+    find "$SPARKLE" -type d -path '*/XPCServices/*.xpc' -prune -print
+    find "$SPARKLE" -name Autoupdate -type f -print
+    find "$SPARKLE" -type d -name '*.app' -prune -print)
+  sign_nested "$SPARKLE"
+  sign_nested "$APP"
+  codesign --verify --deep --strict "$APP"
+
   echo "==> Checking entitlements"
   # A debug entitlement that survives into a release build costs a notarisation
   # round trip to discover, so fail here instead.
@@ -90,7 +109,17 @@ if [[ -n "${NOTARY_APPLE_ID:-}" && -n "${NOTARY_PASSWORD:-}" && -n "${TEAM_ID:-}
     --apple-id "$NOTARY_APPLE_ID" \
     --password "$NOTARY_PASSWORD" \
     --team-id "$TEAM_ID" \
-    --wait
+    --wait \
+    --output-format plist > "$DIST/notarize-result.plist" || true
+  SUBMISSION_ID=$(plutil -extract id raw "$DIST/notarize-result.plist" 2>/dev/null || true)
+  STATUS=$(plutil -extract status raw "$DIST/notarize-result.plist" 2>/dev/null || true)
+  if [[ "$STATUS" != "Accepted" ]]; then
+    echo "error: notarization status is '${STATUS:-unknown}'; the notary log:" >&2
+    [[ -n "$SUBMISSION_ID" ]] && xcrun notarytool log "$SUBMISSION_ID" \
+      --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" --team-id "$TEAM_ID" >&2
+    exit 1
+  fi
+  rm -f "$DIST/notarize-result.plist"
   xcrun stapler staple "$APP"
   rm -f "$DIST/notarize.zip"
 else
