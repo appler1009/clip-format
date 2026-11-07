@@ -4,6 +4,11 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.5
+
+- ClipFormat can now update itself. It checks once a day, asks before
+  installing, and can be checked by hand from the menu-bar menu or Settings.
+
 ## 0.5.4
 
 - The menu-bar icon no longer shows a red ✕ when the clipboard isn't something

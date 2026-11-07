@@ -55,6 +55,18 @@
 	</array>
 	<key>NSHumanReadableCopyright</key>
 	<string>ClipFormat — free, no paywall.</string>
+	<key>SUFeedURL</key>
+	<string>$(UPDATE_FEED_URL)</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_KEY)</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<!-- The app is sandboxed, so installing goes through Sparkle's launcher
+	     XPC service; see the mach-lookup entries in ClipFormat.entitlements. -->
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
 	<key>NSSupportsAutomaticTermination</key>
 	<false/>
 	<key>NSSupportsSuddenTermination</key>
