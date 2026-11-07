@@ -11,7 +11,7 @@ settings:
     SWIFT_VERSION: "5.9"
     # Single source of truth for the release version. The release
     # workflow refuses to build if the pushed tag disagrees with it.
-    MARKETING_VERSION: "0.5.3"
+    MARKETING_VERSION: "0.5.5"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: TN2RQ5P647
@@ -22,6 +22,10 @@ settings:
 packages:
   ClipFormatShared:
     path: Shared/ClipFormatShared
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    # Exactly this one: an updater is taken on purpose, not on a build.
+    exactVersion: 2.10.1
 
 targets:
   ClipFormat:
@@ -32,6 +36,7 @@ targets:
     dependencies:
       - package: ClipFormatShared
         product: ClipFormatShared
+      - package: Sparkle
       - target: ClipFormatPreview
         embed: true
     settings:
@@ -42,6 +47,11 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Where the app looks for a newer ClipFormat, and the key what it finds
+        # is signed with (Info.plist reads both). With either empty the app
+        # doesn't look. Scripts/publish-update.sh writes and uploads the feed.
+        UPDATE_FEED_URL: "https://pub-e14a5d06a2a8409c8ca74054da8d318f.r2.dev/clipformat/appcast.xml"
+        SPARKLE_PUBLIC_KEY: "31PWX5oG7MAIiIdRLmg3rtrWAFgOdid+NpkKpzTwcxQ="
       configs:
         # Debug adds only one thing: outbound network, for LogDock diagnostics.
         Debug:

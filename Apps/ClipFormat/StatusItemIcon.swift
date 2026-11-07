@@ -1,7 +1,8 @@
 import AppKit
 
 /// The menu-bar glyph: template braces, optionally badged with whether the
-/// clipboard holds something this app can format.
+/// clipboard holds something this app can format. Anything else gets the plain
+/// braces — there is deliberately no "invalid" badge.
 ///
 /// Drawing happens inside `NSImage(size:flipped:drawingHandler:)` so the braces
 /// pick up the correct label colour every time the menu bar redraws — including
@@ -9,13 +10,11 @@ import AppKit
 enum StatusItemIcon {
     enum State: Hashable {
         case valid
-        case invalid
         case neutral
 
         var badgeColor: NSColor? {
             switch self {
             case .valid: return .systemGreen
-            case .invalid: return .systemRed
             case .neutral: return nil
             }
         }
@@ -23,7 +22,6 @@ enum StatusItemIcon {
         var badgeSymbol: String? {
             switch self {
             case .valid: return "checkmark"
-            case .invalid: return "xmark"
             case .neutral: return nil
             }
         }
@@ -31,7 +29,6 @@ enum StatusItemIcon {
         var accessibilityDescription: String {
             switch self {
             case .valid: return "ClipFormat — clipboard contains something ClipFormat can format"
-            case .invalid: return "ClipFormat — clipboard has nothing to format"
             case .neutral: return "ClipFormat"
             }
         }
@@ -39,12 +36,11 @@ enum StatusItemIcon {
 
     private static let size = NSSize(width: 20, height: 18)
 
-    /// Three discrete states — cache the `NSImage` wrappers. Drawing still runs
+    /// Two discrete states — cache the `NSImage` wrappers. Drawing still runs
     /// through `drawingHandler` when the menu bar needs a fresh composite
     /// (appearance / tint changes), so the glyphs stay correct.
     private static let images: [State: NSImage] = [
         .valid: makeImage(for: .valid),
-        .invalid: makeImage(for: .invalid),
         .neutral: makeImage(for: .neutral),
     ]
 

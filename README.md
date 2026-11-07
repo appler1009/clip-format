@@ -8,7 +8,7 @@ Still free, still no paywall.
 
 ## What it does
 
-- **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds something this app can format, a red ✕ when it holds JSON or XML that does not parse.
+- **Menu-bar state at a glance** — braces with a green ✓ when the clipboard holds something this app can format; plain braces when it holds anything else.
 - **Click for the formatted view** — syntax-coloured, selectable, scrollable, with a top action cluster (Copy Pretty / Minified, font size, Preferences). Escape dismisses the popover.
 - **Tear it off** — drag the six-dot grabber (or the popover) away from the menu bar and it becomes a window that keeps following the clipboard. Resizable, remembers its frame, full-screen capable, Escape to close.
 - **Quick Look for `.json`, `.jsonc`, `.jsonl`, `.ndjson` and `.xml` files** — Spacebar in Finder renders through the same code the popover uses.
@@ -63,7 +63,7 @@ Right-click the menu-bar icon → Preferences…, or press ⌘, while the app is
 - **Indent** — 2, 4, or 8 spaces (popover and Quick Look)
 - **Font size** — 9–28 pt for the popover JSON; ⌘+ / ⌘− also change it while the popover or window is open. Quick Look uses the last saved size on the next Spacebar.
 - **Show invisible characters** — spaces as `·`, tabs as `⇥`, line breaks as `↵` in the preview (formatted or plain). Copy Pretty / Minified stay clean.
-- **Show ✓ / ✕ badge** — off gives you plain template braces
+- **Show ✓ badge** — a green ✓ when the clipboard holds something ClipFormat can format; off gives you plain template braces
 - **Launch at login** — via `SMAppService`
 
 ## Quick Look not updating?

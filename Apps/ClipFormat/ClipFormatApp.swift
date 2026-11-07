@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         configurePopover()
+        // Starts Sparkle's daily check; a build without a feed does nothing.
+        _ = AppUpdates.shared
 
         // Re-render the icon whenever the clipboard state or the badge
         // preference changes. The published values have to come from the
@@ -116,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateIcon(isValid: Bool? = nil, showBadge: Bool? = nil) {
         let showBadge = showBadge ?? preferences.showBadge
         let isValid = isValid ?? monitor.document.isValid
-        let state: StatusItemIcon.State = showBadge ? (isValid ? .valid : .invalid) : .neutral
+        let state: StatusItemIcon.State = showBadge && isValid ? .valid : .neutral
         statusItem?.button?.image = StatusItemIcon.image(for: state)
     }
 
@@ -132,10 +134,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
+        // Left on, validation would re-enable "Check for Updates…" in a build with no feed.
+        menu.autoenablesItems = false
         menu.addItem(withTitle: "Show Clipboard", action: #selector(showJSONWindow), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "About ClipFormat", action: #selector(showAbout), keyEquivalent: "")
+        let updates = menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.isEnabled = AppUpdates.shared.available
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit ClipFormat", action: #selector(quit), keyEquivalent: "q")
         menu.items.forEach { $0.target = self }
@@ -291,6 +297,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .applicationName: "ClipFormat",
             .init(rawValue: "Copyright"): "Revived.\nJSON and XML in the menu bar and in Quick Look.",
         ])
+    }
+
+    @objc private func checkForUpdates() {
+        popover.performClose(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        AppUpdates.shared.check()
     }
 
     @objc private func quit() {

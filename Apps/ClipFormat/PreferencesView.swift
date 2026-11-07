@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PreferencesView: View {
     @ObservedObject var preferences: Preferences
+    @ObservedObject private var updates = AppUpdates.shared
 
     var body: some View {
         Form {
@@ -25,10 +26,25 @@ struct PreferencesView: View {
             }
 
             Section("Menu bar") {
-                Toggle("Show ✓ / ✕ badge", isOn: $preferences.showBadge)
-                Text("Off shows plain braces that follow the menu bar’s appearance.")
+                Toggle("Show ✓ badge", isOn: $preferences.showBadge)
+                Text("The ✓ appears only when the clipboard holds something ClipFormat can format. Off always shows plain braces.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Updates") {
+                Toggle("Check for updates automatically", isOn: Binding(
+                    get: { updates.checksAutomatically },
+                    set: { updates.checksAutomatically = $0 }
+                ))
+                .disabled(!updates.available)
+                Button("Check for Updates…") { updates.check() }
+                    .disabled(!updates.available)
+                if !updates.available {
+                    Text("This build has no update feed, so it never looks.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Startup") {
