@@ -1,9 +1,9 @@
 name: CI
 
+# Manual only. The Tart runner takes one job at a time and is tight on memory, so a push or a pull
+# request no longer queues a build; the release workflow runs the same tests and builds before it ships.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
