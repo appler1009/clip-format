@@ -2,6 +2,8 @@
 # Signs dist/ClipFormat-<version>.dmg for Sparkle, writes dist/appcast.xml, and uploads both to R2
 # under the clipformat/ prefix (the bucket is shared with other apps).
 #
+# Afterwards it prunes the oldest DMGs there (prune-update-dmgs.sh).
+#
 # Run by the release workflow after package.sh. With DRY_RUN=1 it signs and writes the appcast
 # but uploads nothing.
 #
@@ -78,3 +80,6 @@ upload() { # file key content-type cache-control
 # The DMG first, so the feed never points at a file that isn't there yet.
 upload "$DMG" "ClipFormat-$VERSION.dmg" application/octet-stream "public, max-age=31536000, immutable"
 upload "$APPCAST" appcast.xml application/xml "no-cache"
+
+# Keep the newest few DMGs in the bucket; a failure here is a warning, not a failed release.
+PREFIX="$PREFIX" NAME="ClipFormat" PROTECT="$PREFIX/ClipFormat-$VERSION.dmg" Scripts/prune-update-dmgs.sh || echo "::warning::could not prune old DMGs"
