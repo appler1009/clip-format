@@ -11,6 +11,8 @@ public enum DocumentKind: String, Sendable, Equatable {
     case jsonc
     /// XML.
     case xml
+    /// YAML, highlighted and re-indented line by line rather than parsed.
+    case yaml
 }
 
 /// The result of trying to read some text as one of the formats this app
@@ -42,7 +44,9 @@ public struct FormattedDocument: Sendable {
     /// to re-run the printer per frame. Capped at `FormatCanvas.renderCharacterLimit`.
     public let tokens: [SyntaxToken]
 
-    public var isValid: Bool { !records.isEmpty || !xmlNodes.isEmpty }
+    public var isValid: Bool { !records.isEmpty || !xmlNodes.isEmpty || isValidYAML }
+
+    private let isValidYAML: Bool
 
     /// The single value, when the source held one document — with or without
     /// comments. Nil only for JSON Lines, which genuinely has no one value;
@@ -73,6 +77,7 @@ public struct FormattedDocument: Sendable {
         self.records = []
         self.xmlNodes = xmlNodes
         self.kind = .xml
+        self.isValidYAML = false
         self.errorTitle = errorTitle
         self.errorMessage = errorMessage
 
@@ -87,6 +92,23 @@ public struct FormattedDocument: Sendable {
         self.isTruncated = isTruncated || printed.isTruncated
     }
 
+    /// YAML. Pass no `yaml` and an error for the failure case; the document
+    /// still reports `.yaml`, as XML does.
+    public init(source: String, indent: Int,
+                yaml: (tokens: [SyntaxToken], isTruncated: Bool)?,
+                errorTitle: String = "Not YAML", errorMessage: String? = nil) {
+        self.source = source
+        self.indent = indent
+        self.records = []
+        self.xmlNodes = []
+        self.kind = .yaml
+        self.errorTitle = errorTitle
+        self.errorMessage = errorMessage
+        self.tokens = yaml?.tokens ?? []
+        self.isTruncated = yaml?.isTruncated ?? false
+        self.isValidYAML = yaml != nil && !(yaml?.tokens.isEmpty ?? true)
+    }
+
     public init(source: String, indent: Int, records: [JSONValue], kind: DocumentKind,
                 errorTitle: String = "Not JSON", errorMessage: String?,
                 isTruncated: Bool = false) {
@@ -95,6 +117,7 @@ public struct FormattedDocument: Sendable {
         self.records = records
         self.xmlNodes = []
         self.kind = kind
+        self.isValidYAML = false
         self.errorTitle = errorTitle
         self.errorMessage = errorMessage
 
@@ -143,6 +166,11 @@ public struct FormattedDocument: Sendable {
     /// holds the whole document; regenerates from the AST when the preview was
     /// truncated so Copy still yields everything.
     public var prettyText: String? {
+        if kind == .yaml {
+            guard isValidYAML else { return nil }
+            if !isTruncated { return tokens.map(\.text).joined() }
+            return YAMLFormatter.pretty(source, indent: indent)
+        }
         if kind == .xml {
             guard !xmlNodes.isEmpty else { return nil }
             if !isTruncated { return tokens.map(\.text).joined() }
@@ -157,6 +185,8 @@ public struct FormattedDocument: Sendable {
     /// For JSON Lines this is the file's own shape — one minified record per
     /// line — so Copy Minified round-trips rather than producing an array.
     public var minifiedText: String? {
+        // YAML's indentation is its structure; there is no smaller form.
+        if kind == .yaml { return nil }
         if kind == .xml {
             return xmlNodes.isEmpty ? nil : XMLPrinter.minified(xmlNodes)
         }
