@@ -60,6 +60,7 @@
 				<string>com.appler1009.jsonl</string>
 				<string>com.appler1009.jsonc</string>
 				<string>public.xml</string>
+				<string>public.yaml</string>
 			</array>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

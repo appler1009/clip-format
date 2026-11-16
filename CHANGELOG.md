@@ -4,6 +4,14 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.6
+
+- YAML. Copied YAML is recognised on the clipboard (a leading `---`, or
+  structured `key: value` lines) and shown highlighted and re-indented to your
+  indent setting. Quick Look previews `.yaml` and `.yml` files the same way.
+  Comments, anchors, tags and block scalars are kept as written; there is no
+  Minified form, since indentation is YAML's structure.
+
 ## 0.5.5
 
 - ClipFormat can now update itself. It checks once a day, asks before

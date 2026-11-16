@@ -93,7 +93,8 @@ final class ClipboardMonitor: ObservableObject {
             Task.detached(priority: .userInitiated) {
                 let model: FormattedDocument
                 if let data = try? Data(contentsOf: url, options: .mappedIfSafe) {
-                    model = FormatCanvas.model(from: data, indent: indent)
+                    model = FormatCanvas.model(from: data, indent: indent,
+                                              assumingYAML: FormatCanvas.isYAMLFile(url))
                 } else {
                     model = FormatCanvas.model(from: "", indent: indent)
                 }
@@ -119,7 +120,7 @@ final class ClipboardMonitor: ObservableObject {
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self],
                                              options: [.urlReadingFileURLsOnly: true]) as? [URL],
            let url = urls.first,
-           ["json", "jsonc", "geojson", "webmanifest"].contains(url.pathExtension.lowercased()) {
+           ["json", "jsonc", "geojson", "webmanifest", "yaml", "yml"].contains(url.pathExtension.lowercased()) {
             return .file(url)
         }
         if let text = pasteboard.string(forType: .string) {

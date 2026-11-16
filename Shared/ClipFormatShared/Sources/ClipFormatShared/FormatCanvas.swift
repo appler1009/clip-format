@@ -14,7 +14,8 @@ public enum FormatCanvas {
 
     // MARK: - Model
 
-    public static func model(from text: String, indent: Int = 2) -> FormattedDocument {
+    public static func model(from text: String, indent: Int = 2,
+                             assumingYAML: Bool = false) -> FormattedDocument {
         // A byte order mark is not whitespace to `trimmingCharacters`, so it
         // would survive and sit in front of the first `{` or `<` — where every
         // shape check in this function looks. Editors on Windows write one
@@ -54,6 +55,13 @@ public enum FormatCanvas {
             }
         }
 
+        // A `.yaml` / `.yml` file is YAML whatever it looks like, so a file
+        // never needs the shape check the clipboard does. JSON is valid YAML,
+        // so a JSON file saved under that name is simply shown as written.
+        if assumingYAML {
+            return yamlDocument(trimmed, indent: indent)
+        }
+
         // One strict JSON document is the common case, and it is tried first so
         // that nothing else can loosen what "valid JSON" means.
         var documentError: JSONParseError?
@@ -82,6 +90,14 @@ public enum FormatCanvas {
                                       errorMessage: Self.message(for: lineError, onLine: line))
         case .notLineDelimited:
             break
+        }
+
+        // YAML, ahead of the JSONC stage: a `//` in a URL would otherwise send
+        // the whole source down that path. The shape check never matches
+        // anything that starts with `{`, `[` or `//`, so JSON and JSONC keep
+        // their own readings.
+        if YAMLFormatter.looksLikeYAML(trimmed) {
+            return yamlDocument(trimmed, indent: indent)
         }
 
         // JSONC: comments and trailing commas. Anything succeeding here needed
@@ -127,7 +143,21 @@ public enum FormatCanvas {
         }
         return FormattedDocument(source: trimmed, indent: indent, value: nil,
                                   errorTitle: "Can't format",
-                                  errorMessage: "Not JSON or XML")
+                                  errorMessage: "Not JSON, XML or YAML")
+    }
+
+    private static func yamlDocument(_ trimmed: String, indent: Int) -> FormattedDocument {
+        do {
+            let printed = try YAMLFormatter.tokens(for: trimmed, indent: indent,
+                                                   characterLimit: renderCharacterLimit)
+            return FormattedDocument(source: trimmed, indent: indent, yaml: printed)
+        } catch let error as YAMLFormatError {
+            return FormattedDocument(source: trimmed, indent: indent, yaml: nil,
+                                     errorMessage: error.message)
+        } catch {
+            return FormattedDocument(source: trimmed, indent: indent, yaml: nil,
+                                     errorMessage: error.localizedDescription)
+        }
     }
 
     /// What reading the source as JSON Lines turned up.
@@ -199,7 +229,8 @@ public enum FormatCanvas {
                              byteLimit: Int = sourceByteLimit) throws -> FormattedDocument {
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         guard size > byteLimit else {
-            return model(from: try Data(contentsOf: url, options: .mappedIfSafe), indent: indent)
+            return model(from: try Data(contentsOf: url, options: .mappedIfSafe), indent: indent,
+                         assumingYAML: isYAMLFile(url))
         }
 
         let handle = try FileHandle(forReadingFrom: url)
@@ -214,12 +245,18 @@ public enum FormatCanvas {
                                   isTruncated: true)
     }
 
-    public static func model(from data: Data, indent: Int = 2) -> FormattedDocument {
+    /// `.yaml` and `.yml` are the same format; people use them interchangeably.
+    public static func isYAMLFile(_ url: URL) -> Bool {
+        ["yaml", "yml"].contains(url.pathExtension.lowercased())
+    }
+
+    public static func model(from data: Data, indent: Int = 2,
+                             assumingYAML: Bool = false) -> FormattedDocument {
         guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
             return FormattedDocument(source: "", indent: indent, value: nil,
                                       errorMessage: "File is not readable text")
         }
-        return model(from: text, indent: indent)
+        return model(from: text, indent: indent, assumingYAML: assumingYAML)
     }
 
     /// Cheap pre-check so we do not run the parser over every clipboard change.

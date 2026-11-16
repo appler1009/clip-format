@@ -84,7 +84,7 @@ final class FormatCanvasTests: XCTestCase {
         let text = FormatCanvas.model(from: "hello world")
         XCTAssertFalse(text.isValid)
         XCTAssertEqual(text.errorTitle, "Can't format")
-        XCTAssertEqual(text.errorMessage, "Not JSON or XML")
+        XCTAssertEqual(text.errorMessage, "Not JSON, XML or YAML")
 
         let empty = FormatCanvas.model(from: "   \n ")
         XCTAssertFalse(empty.isValid)
@@ -123,7 +123,7 @@ final class FormatCanvasTests: XCTestCase {
     func testInvalidHTMLShowsExcerpt() {
         let html = FormatCanvas.html(from: FormatCanvas.model(from: "not json <x>"), appearance: .light)
         XCTAssertTrue(html.contains("Can't format"))
-        XCTAssertTrue(html.contains("Not JSON or XML"))
+        XCTAssertTrue(html.contains("Not JSON, XML or YAML"))
         XCTAssertTrue(html.contains("not json &lt;x&gt;"))
     }
 
@@ -233,7 +233,7 @@ final class FormatCanvasTests: XCTestCase {
     func testTextThatIsNeitherJSONNorXMLIsNotPretendedToBeJSON() {
         let document = FormatCanvas.model(from: "hello world")
         XCTAssertEqual(document.errorTitle, "Can't format")
-        XCTAssertEqual(document.errorMessage, "Not JSON or XML")
+        XCTAssertEqual(document.errorMessage, "Not JSON, XML or YAML")
     }
 
     func testXMLTokensCarryTagAndAttributeKinds() {
@@ -565,5 +565,124 @@ final class FormatCanvasTests: XCTestCase {
         // Copy sources stay clean even while the preview shows markers.
         XCTAssertEqual(document.prettyText, "{\n  \"a\": 1\n}")
         XCTAssertEqual(document.minifiedText, #"{"a":1}"#)
+    }
+}
+
+final class YAMLTests: XCTestCase {
+    private func pretty(_ source: String, indent: Int = 2) -> String? {
+        FormatCanvas.model(from: source, indent: indent).prettyText
+    }
+
+    func testClipboardDetectsStructuredYAML() {
+        let document = FormatCanvas.model(from: "name: app\nversion: 1.2\ntags:\n  - a\n  - b\n")
+        XCTAssertEqual(document.kind, .yaml)
+        XCTAssertTrue(document.isValid)
+        XCTAssertNil(document.minifiedText)
+    }
+
+    func testClipboardDoesNotClaimProseOrSingleLines() {
+        XCTAssertFalse(FormatCanvas.model(from: "Note: remember the milk").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "hello world\nsecond line").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "- one\n- two").isValid)
+        XCTAssertFalse(FormatCanvas.model(from: "see http://example.com/a\nthanks").isValid)
+    }
+
+    func testURLInYAMLIsNotSwallowedByJSONC() {
+        let document = FormatCanvas.model(from: "url: http://example.com\nname: x")
+        XCTAssertEqual(document.kind, .yaml)
+        XCTAssertTrue(document.isValid)
+    }
+
+    func testJSONAndJSONCKeepTheirKinds() {
+        XCTAssertEqual(FormatCanvas.model(from: #"{"a": 1}"#).kind, .json)
+        XCTAssertEqual(FormatCanvas.model(from: "// c\n{\"a\": 1}").kind, .jsonc)
+    }
+
+    func testReindentsToTheChosenWidth() {
+        let source = "a:\n    b:\n        c: 1\n    d: 2"
+        XCTAssertEqual(pretty(source, indent: 2), "a:\n  b:\n    c: 1\n  d: 2")
+        XCTAssertEqual(pretty("a:\n  b:\n    c: 1", indent: 4), "a:\n    b:\n        c: 1")
+    }
+
+    func testSequenceAtTheKeysIndentStaysThere() {
+        let source = "items:\n- a\n- b\nnext: 1"
+        XCTAssertEqual(pretty(source), source)
+    }
+
+    func testSequenceOfMappingsKeepsContinuationAligned() {
+        let source = "list:\n    -   name: x\n        size: 1\n    -   name: y"
+        XCTAssertEqual(pretty(source), "list:\n  - name: x\n    size: 1\n  - name: y")
+    }
+
+    func testCommentsAnchorsAndTagsSurvive() {
+        let source = "# top\nbase: &b\n    x: 1 # trailing\nuse:\n    <<: *b\n    t: !!str 5"
+        XCTAssertEqual(pretty(source), "# top\nbase: &b\n  x: 1 # trailing\nuse:\n  <<: *b\n  t: !!str 5")
+    }
+
+    func testBlockScalarKeepsItsText() {
+        let source = "script: |\n        echo hi\n          nested\n\n        done\nafter: 1"
+        XCTAssertEqual(pretty(source), "script: |\n  echo hi\n    nested\n\n  done\nafter: 1")
+    }
+
+    func testBlockScalarContentIsNeverReadAsStructure() {
+        let source = "a: |\n  b: not a key\n  - not a list\nc: 1"
+        let document = FormatCanvas.model(from: source)
+        XCTAssertEqual(document.prettyText, source)
+        XCTAssertFalse(document.tokens.contains { $0.kind == .key && $0.text == "b" })
+    }
+
+    func testMultiLineFlowAndQuotes() {
+        XCTAssertEqual(pretty("a: [1,\n   2]\nb: \"x\n  y\"\nc: 1"),
+                       "a: [1,\n  2]\nb: \"x\n  y\"\nc: 1")
+    }
+
+    func testDocumentSeparators() {
+        let source = "---\na: 1\n---\nb: 2"
+        let document = FormatCanvas.model(from: source)
+        XCTAssertEqual(document.kind, .yaml)
+        XCTAssertEqual(document.prettyText, source)
+    }
+
+    func testTokenColours() {
+        let kinds = FormatCanvas.model(from: "a: 1\nb: true\nc: ~\nd: \"s\"\ne: plain\nf: [x, 2]").tokens
+        func kind(of text: String) -> SyntaxToken.Kind? { kinds.first { $0.text == text }?.kind }
+        XCTAssertEqual(kind(of: "a"), .key)
+        XCTAssertEqual(kind(of: "1"), .number)
+        XCTAssertEqual(kind(of: "true"), .bool)
+        XCTAssertEqual(kind(of: "~"), .null)
+        XCTAssertEqual(kind(of: "plain"), .string)
+        XCTAssertEqual(kind(of: "2"), .number)
+    }
+
+    func testTabIndentAndBadDedentAreReported() {
+        let tabs = FormatCanvas.model(from: "a:\n\tb: 1\nc: 2", assumingYAML: true)
+        XCTAssertFalse(tabs.isValid)
+        XCTAssertEqual(tabs.errorTitle, "Not YAML")
+        XCTAssertEqual(tabs.errorMessage, "Tabs can't indent YAML (line 2)")
+
+        let dedent = FormatCanvas.model(from: "a:\n    b:\n        c: 1\n  d: 2", assumingYAML: true)
+        XCTAssertEqual(dedent.errorMessage, "Indentation doesn't match any level above (line 4)")
+
+        let open = FormatCanvas.model(from: "a: [1, 2\nb: 3", assumingYAML: true)
+        XCTAssertEqual(open.kind, .yaml)
+        XCTAssertFalse(open.isValid)
+    }
+
+    func testFilesWithEitherExtensionAreYAMLWithoutTheShapeCheck() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for name in ["one.yaml", "two.yml", "THREE.YML"] {
+            let url = dir.appendingPathComponent(name)
+            try "only: one".write(to: url, atomically: true, encoding: .utf8)
+            let document = try FormatCanvas.model(contentsOf: url)
+            XCTAssertEqual(document.kind, .yaml, name)
+            XCTAssertTrue(document.isValid, name)
+        }
+    }
+
+    func testRendersToHTML() {
+        let html = FormatCanvas.html(from: FormatCanvas.model(from: "a: 1\nb: x"))
+        XCTAssertTrue(html.contains("<span class=\"k\">a</span>"))
     }
 }

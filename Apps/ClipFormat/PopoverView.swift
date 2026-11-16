@@ -164,7 +164,7 @@ struct PopoverView: View {
             Button("Pretty") { copy(document.prettyText) }
                 .disabled(!document.isValid)
             Button("Minified") { copy(document.minifiedText) }
-                .disabled(!document.isValid)
+                .disabled(!document.isValid || document.minifiedText == nil)
         } label: {
             Label("Copy", systemImage: "doc.on.doc")
         }
