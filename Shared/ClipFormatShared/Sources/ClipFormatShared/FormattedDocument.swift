@@ -46,6 +46,7 @@ public struct FormattedDocument: Sendable {
 
     public var isValid: Bool { !records.isEmpty || !xmlNodes.isEmpty || isValidYAML }
 
+    /// YAML has no tree to check for emptiness, so its success is recorded.
     private let isValidYAML: Bool
 
     /// The single value, when the source held one document — with or without
@@ -55,6 +56,23 @@ public struct FormattedDocument: Sendable {
 
     /// How many lines parsed, for the "17 records" the hosts show.
     public var recordCount: Int { records.count }
+
+    /// Every public initialiser lands here, so each field is set in one place.
+    private init(source: String, indent: Int, kind: DocumentKind,
+                 records: [JSONValue] = [], xmlNodes: [XMLValue] = [], isValidYAML: Bool = false,
+                 printed: (tokens: [SyntaxToken], isTruncated: Bool),
+                 errorTitle: String, errorMessage: String?, isTruncated: Bool) {
+        self.source = source
+        self.indent = indent
+        self.kind = kind
+        self.records = records
+        self.xmlNodes = xmlNodes
+        self.isValidYAML = isValidYAML
+        self.tokens = printed.tokens
+        self.isTruncated = isTruncated || printed.isTruncated
+        self.errorTitle = errorTitle
+        self.errorMessage = errorMessage
+    }
 
     public init(source: String, indent: Int, value: JSONValue?,
                 errorTitle: String = "Not JSON", errorMessage: String?,
@@ -72,24 +90,13 @@ public struct FormattedDocument: Sendable {
     public init(source: String, indent: Int, xmlNodes: [XMLValue],
                 errorTitle: String = "Not XML", errorMessage: String? = nil,
                 isTruncated: Bool = false) {
-        self.source = source
-        self.indent = indent
-        self.records = []
-        self.xmlNodes = xmlNodes
-        self.kind = .xml
-        self.isValidYAML = false
-        self.errorTitle = errorTitle
-        self.errorMessage = errorMessage
-
-        guard !xmlNodes.isEmpty else {
-            self.tokens = []
-            self.isTruncated = isTruncated
-            return
-        }
-        let printed = XMLPrinter.tokens(for: xmlNodes, indent: indent,
-                                        characterLimit: FormatCanvas.renderCharacterLimit)
-        self.tokens = printed.tokens
-        self.isTruncated = isTruncated || printed.isTruncated
+        let printed = xmlNodes.isEmpty
+            ? ([], false)
+            : XMLPrinter.tokens(for: xmlNodes, indent: indent,
+                                characterLimit: FormatCanvas.renderCharacterLimit)
+        self.init(source: source, indent: indent, kind: .xml, xmlNodes: xmlNodes,
+                  printed: printed, errorTitle: errorTitle, errorMessage: errorMessage,
+                  isTruncated: isTruncated)
     }
 
     /// YAML. Pass no `yaml` and an error for the failure case; the document
@@ -97,39 +104,22 @@ public struct FormattedDocument: Sendable {
     public init(source: String, indent: Int,
                 yaml: (tokens: [SyntaxToken], isTruncated: Bool)?,
                 errorTitle: String = "Not YAML", errorMessage: String? = nil) {
-        self.source = source
-        self.indent = indent
-        self.records = []
-        self.xmlNodes = []
-        self.kind = .yaml
-        self.errorTitle = errorTitle
-        self.errorMessage = errorMessage
-        self.tokens = yaml?.tokens ?? []
-        self.isTruncated = yaml?.isTruncated ?? false
-        self.isValidYAML = yaml != nil && !(yaml?.tokens.isEmpty ?? true)
+        self.init(source: source, indent: indent, kind: .yaml,
+                  isValidYAML: !(yaml?.tokens.isEmpty ?? true),
+                  printed: yaml ?? ([], false),
+                  errorTitle: errorTitle, errorMessage: errorMessage, isTruncated: false)
     }
 
     public init(source: String, indent: Int, records: [JSONValue], kind: DocumentKind,
                 errorTitle: String = "Not JSON", errorMessage: String?,
                 isTruncated: Bool = false) {
-        self.source = source
-        self.indent = indent
-        self.records = records
-        self.xmlNodes = []
-        self.kind = kind
-        self.isValidYAML = false
-        self.errorTitle = errorTitle
-        self.errorMessage = errorMessage
-
-        guard !records.isEmpty else {
-            self.tokens = []
-            self.isTruncated = isTruncated
-            return
-        }
-        let printed = Self.tokens(for: records, kind: kind, indent: indent,
-                                  characterLimit: FormatCanvas.renderCharacterLimit)
-        self.tokens = printed.tokens
-        self.isTruncated = isTruncated || printed.isTruncated
+        let printed = records.isEmpty
+            ? ([], false)
+            : Self.tokens(for: records, kind: kind, indent: indent,
+                          characterLimit: FormatCanvas.renderCharacterLimit)
+        self.init(source: source, indent: indent, kind: kind, records: records,
+                  printed: printed, errorTitle: errorTitle, errorMessage: errorMessage,
+                  isTruncated: isTruncated)
     }
 
     /// A blank line between records keeps a JSON Lines file readable once each
@@ -139,62 +129,49 @@ public struct FormattedDocument: Sendable {
         guard kind == .lineDelimited else {
             return PrettyPrinter.tokens(for: records[0], indent: indent, characterLimit: characterLimit)
         }
-        var tokens: [SyntaxToken] = []
-        tokens.reserveCapacity(records.count * 8)
-        var count = 0
+        var sink = TokenSink(limit: characterLimit, reserve: records.count * 8)
         for (offset, record) in records.enumerated() {
-            if offset > 0 {
-                let gap = "\n\n"
-                if count + gap.count > characterLimit {
-                    tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
-                    tokens.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
-                    return (tokens, true)
-                }
-                count += gap.count
-                tokens.append(SyntaxToken(kind: .whitespace, text: gap))
-            }
-            let remaining = max(0, characterLimit - count)
-            let printed = PrettyPrinter.tokens(for: record, indent: indent, characterLimit: remaining)
-            tokens.append(contentsOf: printed.tokens)
-            if printed.isTruncated { return (tokens, true) }
-            count += printed.tokens.reduce(0) { $0 + $1.text.count }
+            if offset > 0 { sink.append(.whitespace, "\n\n") }
+            PrettyPrinter.emit(record, indent: indent, level: 0, into: &sink)
+            if sink.isTruncated { break }
         }
-        return (tokens, false)
+        return sink.finish()
     }
 
     /// Formatted text for Copy Pretty. Uses the display token stream when it
     /// holds the whole document; regenerates from the AST when the preview was
     /// truncated so Copy still yields everything.
     public var prettyText: String? {
-        if kind == .yaml {
-            guard isValidYAML else { return nil }
-            if !isTruncated { return tokens.map(\.text).joined() }
-            return YAMLFormatter.pretty(source, indent: indent)
-        }
-        if kind == .xml {
-            guard !xmlNodes.isEmpty else { return nil }
-            if !isTruncated { return tokens.map(\.text).joined() }
-            return XMLPrinter.pretty(xmlNodes, indent: indent)
-        }
-        guard !records.isEmpty else { return nil }
+        guard isValid else { return nil }
         if !isTruncated { return tokens.map(\.text).joined() }
-        guard kind == .lineDelimited else { return PrettyPrinter.pretty(records[0], indent: indent) }
-        return records.map { PrettyPrinter.pretty($0, indent: indent) }.joined(separator: "\n\n")
+        switch kind {
+        case .yaml:
+            return YAMLFormatter.pretty(source, indent: indent)
+        case .xml:
+            return XMLPrinter.pretty(xmlNodes, indent: indent)
+        case .lineDelimited:
+            return records.map { PrettyPrinter.pretty($0, indent: indent) }.joined(separator: "\n\n")
+        case .json, .jsonc:
+            return PrettyPrinter.pretty(records[0], indent: indent)
+        }
     }
 
     /// For JSON Lines this is the file's own shape — one minified record per
     /// line — so Copy Minified round-trips rather than producing an array.
     public var minifiedText: String? {
-        // YAML's indentation is its structure; there is no smaller form.
-        if kind == .yaml { return nil }
-        if kind == .xml {
-            return xmlNodes.isEmpty ? nil : XMLPrinter.minified(xmlNodes)
+        guard isValid else { return nil }
+        switch kind {
+        case .yaml:
+            // YAML's indentation is its structure; there is no smaller form.
+            return nil
+        case .xml:
+            return XMLPrinter.minified(xmlNodes)
+        case .json, .jsonc, .lineDelimited:
+            return records.map { PrettyPrinter.minified($0) }.joined(separator: "\n")
         }
-        guard !records.isEmpty else { return nil }
-        return records.map { PrettyPrinter.minified($0) }.joined(separator: "\n")
     }
 
-    /// A short one-line sample of the source, for the "not JSON" state.
+    /// A short sample of the source, for the state shown when it did not format.
     public func rawExcerpt(limit: Int = 400) -> String {
         let collapsed = source
             .replacingOccurrences(of: "\r\n", with: "\n")

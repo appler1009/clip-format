@@ -30,15 +30,10 @@ public enum YAMLFormatter {
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             number += 1
             try run.consume(line, number: number)
-            if run.truncated { break }
+            if run.sink.isTruncated { break }
         }
-        if !run.truncated { try run.finish() }
-        var tokens = run.tokens
-        if run.truncated {
-            tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
-            tokens.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
-        }
-        return (tokens, run.truncated)
+        if !run.sink.isTruncated { try run.finish() }
+        return run.sink.finish()
     }
 
     public static func pretty(_ source: String, indent: Int) -> String? {
@@ -62,7 +57,7 @@ public enum YAMLFormatter {
             let indentWidth = line.prefix(while: { $0 == " " }).count
             let rest = line.dropFirst(indentWidth)
             if rest.isEmpty || rest.allSatisfy(\.isWhitespace) { continue }
-            if rest.first == "\t" || (indentWidth == 0 && line.first == "\t") { return false }
+            if rest.first == "\t" { return false }
             if rest.first == "#" { continue }
             if indentWidth == 0, rest == "---" || rest.hasPrefix("--- ") || rest == "..." {
                 if !sawContent { startedWithMarker = true }
@@ -188,6 +183,25 @@ public enum YAMLFormatter {
         var isOpen: Bool { flowDepth > 0 || openQuote != nil }
     }
 
+    /// Finds the end of a quoted scalar starting at `start` (just past the
+    /// opening quote): a backslash escapes in double quotes, and a doubled
+    /// quote is the escape in single quotes. Returns where the scan stopped —
+    /// just past the closing quote, or the end of the line when it is still
+    /// open — and whether it closed.
+    static func scanQuoted(_ chars: [Character], from start: Int,
+                           quote: Character) -> (end: Int, closed: Bool) {
+        var j = start
+        while j < chars.count {
+            if quote == "\"", chars[j] == "\\" { j += 2; continue }
+            if chars[j] == quote {
+                if quote == "'", j + 1 < chars.count, chars[j + 1] == "'" { j += 2; continue }
+                return (j + 1, true)
+            }
+            j += 1
+        }
+        return (chars.count, false)
+    }
+
     /// Tokenizes the text after a key or dash: anchors, tags, quoted strings,
     /// flow collections, comments and plain scalars.
     static func scanValue(_ text: Substring, state: inout ScanState, line: Int,
@@ -206,19 +220,7 @@ public enum YAMLFormatter {
         while i < chars.count {
             // A quote left open by an earlier line is closed first.
             if let quote = state.openQuote {
-                var j = i
-                var closed = false
-                while j < chars.count {
-                    if quote == "\"", chars[j] == "\\" { j += 2; continue }
-                    if chars[j] == quote {
-                        if quote == "'", j + 1 < chars.count, chars[j + 1] == "'" { j += 2; continue }
-                        closed = true
-                        j += 1
-                        break
-                    }
-                    j += 1
-                }
-                j = min(j, chars.count)
+                let (j, closed) = scanQuoted(chars, from: i, quote: quote)
                 put(.string, String(chars[i..<j]))
                 i = j
                 if closed { state.openQuote = nil; seenValueToken = true; atItemStart = false }
@@ -261,20 +263,8 @@ public enum YAMLFormatter {
                 state.openedOnLine = line
                 put(.string, String(ch))
                 i += 1
-                // The quote loop above finishes it, on this line or a later one.
-                var j = i
-                var closed = false
-                while j < chars.count {
-                    if ch == "\"", chars[j] == "\\" { j += 2; continue }
-                    if chars[j] == ch {
-                        if ch == "'", j + 1 < chars.count, chars[j + 1] == "'" { j += 2; continue }
-                        closed = true
-                        j += 1
-                        break
-                    }
-                    j += 1
-                }
-                j = min(j, chars.count)
+                // Left open, the branch above finishes it on a later line.
+                let (j, closed) = scanQuoted(chars, from: i, quote: ch)
                 let body = String(chars[i..<j])
                 // In a flow mapping a quoted word before a colon is a key.
                 var isKey = false
@@ -357,10 +347,7 @@ public enum YAMLFormatter {
 
     private struct Run {
         let width: Int
-        let limit: Int
-        var tokens: [SyntaxToken] = []
-        var count = 0
-        var truncated = false
+        var sink: TokenSink
 
         var stack: [Level] = []
         var scan = ScanState()
@@ -378,15 +365,12 @@ public enum YAMLFormatter {
 
         init(width: Int, limit: Int) {
             self.width = width
-            self.limit = limit
+            self.sink = TokenSink(limit: limit)
         }
 
         mutating func emit(_ kind: SyntaxToken.Kind, _ text: String) {
-            guard !truncated, !text.isEmpty else { return }
-            let next = count + text.count
-            if next > limit { truncated = true; return }
-            count = next
-            tokens.append(SyntaxToken(kind: kind, text: text))
+            guard !text.isEmpty else { return }
+            sink.append(kind, text)
         }
 
         mutating func emit(_ batch: [SyntaxToken]) {
@@ -539,10 +523,13 @@ public enum YAMLFormatter {
                 return
             }
 
-            lastOwnerSrc = dashed && YAMLFormatter.splitKey(text) == nil ? ownerSrc - 1 : ownerSrc
+            // A plain value after a dash continues on any line indented past
+            // the dash; one after a key, only past the key's own column.
+            let split = YAMLFormatter.splitKey(text)
+            lastOwnerSrc = dashed && split == nil ? ownerSrc - 1 : ownerSrc
             lastOwnerOut = ownerOut
 
-            if let split = YAMLFormatter.splitKey(text) {
+            if let split {
                 let key = text[text.startIndex..<split.afterColon].dropLast()
                 emit(.key, String(key))
                 emit(.punctuation, ":")
@@ -553,16 +540,20 @@ public enum YAMLFormatter {
             } else {
                 let tokensForValue = YAMLFormatter.scanValue(text, state: &scan, line: number)
                 emit(tokensForValue)
-                lastHadInlineValue = tokensForValue.contains { ![.whitespace, .comment, .attributeName].contains($0.kind) }
-                    && !scan.isOpen
-                if dashed { lastOwnerSrc = ownerSrc - 1 }
+                lastHadInlineValue = tokensForValue.contains(where: Self.isMeaningful) && !scan.isOpen
             }
+        }
+
+        /// A value token, as opposed to spacing, a comment, or an anchor or tag
+        /// that only labels what follows on the next lines.
+        static func isMeaningful(_ token: SyntaxToken) -> Bool {
+            ![.whitespace, .comment, .attributeName].contains(token.kind)
         }
 
         /// After a key: is there a real value on the line, and does it open a
         /// block scalar.
         mutating func noteValue(_ value: [SyntaxToken], ownerSrc: Int) {
-            let meaningful = value.filter { ![.whitespace, .comment, .attributeName].contains($0.kind) }
+            let meaningful = value.filter(Self.isMeaningful)
             if let first = meaningful.first, first.kind == .punctuation, first.text.first == "|" || first.text.first == ">" {
                 blockOwnerSrc = ownerSrc
                 blockOut = lastOwnerOut + width

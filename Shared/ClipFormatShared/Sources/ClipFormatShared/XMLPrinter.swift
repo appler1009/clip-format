@@ -5,22 +5,14 @@ import Foundation
 public enum XMLPrinter {
     public static func tokens(for nodes: [XMLValue], indent: Int,
                               characterLimit: Int = .max) -> (tokens: [SyntaxToken], isTruncated: Bool) {
-        var tokens: [SyntaxToken] = []
-        tokens.reserveCapacity(64)
-        var count = 0
-        var truncated = false
+        var sink = TokenSink(limit: characterLimit)
         let significant = nodes.filter { !$0.isInsignificantWhitespace }
         for (offset, node) in significant.enumerated() {
-            if truncated { break }
-            if offset > 0 { append(.whitespace, "\n", limit: characterLimit, count: &count, truncated: &truncated, into: &tokens) }
-            emit(node, indent: indent, level: 0, limit: characterLimit,
-                 count: &count, truncated: &truncated, into: &tokens)
+            if sink.isTruncated { break }
+            if offset > 0 { sink.append(.whitespace, "\n") }
+            emit(node, indent: indent, level: 0, into: &sink)
         }
-        if truncated {
-            tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
-            tokens.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
-        }
-        return (tokens, truncated)
+        return sink.finish()
     }
 
     public static func pretty(_ nodes: [XMLValue], indent: Int) -> String {
@@ -39,27 +31,12 @@ public enum XMLPrinter {
         return out
     }
 
-    private static func append(_ kind: SyntaxToken.Kind, _ text: String, limit: Int,
-                               count: inout Int, truncated: inout Bool,
-                               into tokens: inout [SyntaxToken]) {
-        guard !truncated else { return }
-        let next = count + text.count
-        if next > limit {
-            truncated = true
-            return
-        }
-        count = next
-        tokens.append(SyntaxToken(kind: kind, text: text))
-    }
-
-    private static func emit(_ node: XMLValue, indent: Int, level: Int, limit: Int,
-                             count: inout Int, truncated: inout Bool,
-                             into tokens: inout [SyntaxToken]) {
-        guard !truncated else { return }
+    private static func emit(_ node: XMLValue, indent: Int, level: Int, into sink: inout TokenSink) {
+        guard !sink.isTruncated else { return }
         let pad = String(repeating: " ", count: indent * level)
 
         func put(_ kind: SyntaxToken.Kind, _ text: String) {
-            append(kind, text, limit: limit, count: &count, truncated: &truncated, into: &tokens)
+            sink.append(kind, text)
         }
 
         switch node {
@@ -67,7 +44,7 @@ public enum XMLPrinter {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
             put(.whitespace, pad)
-            put(.text, escape(trimmed))
+            put(.text, escapeMarkup(trimmed))
 
         case .comment(let value):
             put(.whitespace, pad)
@@ -91,7 +68,7 @@ public enum XMLPrinter {
                 put(.whitespace, " ")
                 put(.attributeName, attribute.name)
                 put(.punctuation, "=")
-                put(.string, "\"\(escape(attribute.value))\"")
+                put(.string, "\"\(escapeMarkup(attribute.value))\"")
             }
 
             let significant = children.filter { !$0.isInsignificantWhitespace }
@@ -104,13 +81,12 @@ public enum XMLPrinter {
             // An element holding only text stays on one line: <title>Hi</title>
             // reads worse broken across three.
             if significant.count == 1, case .text(let value) = significant[0] {
-                put(.text, escape(value.trimmingCharacters(in: .whitespacesAndNewlines)))
+                put(.text, escapeMarkup(value.trimmingCharacters(in: .whitespacesAndNewlines)))
             } else {
                 for child in significant {
-                    if truncated { return }
+                    if sink.isTruncated { return }
                     put(.whitespace, "\n")
-                    emit(child, indent: indent, level: level + 1, limit: limit,
-                         count: &count, truncated: &truncated, into: &tokens)
+                    emit(child, indent: indent, level: level + 1, into: &sink)
                 }
                 put(.whitespace, "\n" + pad)
             }
@@ -123,36 +99,19 @@ public enum XMLPrinter {
     private static func emitMinified(_ node: XMLValue, into out: inout String) {
         switch node {
         case .text(let value):
-            out += escape(value.trimmingCharacters(in: .whitespacesAndNewlines))
+            out += escapeMarkup(value.trimmingCharacters(in: .whitespacesAndNewlines))
         case .comment(let value):
             out += "<!--\(value)-->"
         case .processingInstruction(let target, let data):
             out += "<?\(target)\(data.map { $0.isEmpty ? "" : " \($0)" } ?? "")?>"
         case .element(let name, let attributes, let children):
             out += "<\(name)"
-            for attribute in attributes { out += " \(attribute.name)=\"\(escape(attribute.value))\"" }
+            for attribute in attributes { out += " \(attribute.name)=\"\(escapeMarkup(attribute.value))\"" }
             let significant = children.filter { !$0.isInsignificantWhitespace }
             guard !significant.isEmpty else { out += "/>"; return }
             out += ">"
             for child in significant { emitMinified(child, into: &out) }
             out += "</\(name)>"
         }
-    }
-
-    /// The reader resolves entities, so text arriving here is the real
-    /// characters; putting it back into a document means escaping again.
-    private static func escape(_ text: String) -> String {
-        var out = ""
-        out.reserveCapacity(text.count)
-        for character in text {
-            switch character {
-            case "&": out += "&amp;"
-            case "<": out += "&lt;"
-            case ">": out += "&gt;"
-            case "\"": out += "&quot;"
-            default: out.append(character)
-            }
-        }
-        return out
     }
 }
