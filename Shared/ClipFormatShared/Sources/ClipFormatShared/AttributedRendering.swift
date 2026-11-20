@@ -33,9 +33,7 @@ public extension FormatCanvas {
             if showInvisibles {
                 appendRevealingInvisibles(run, kind: kind, theme: theme, into: &result)
             } else {
-                var piece = AttributedString(run)
-                style(&piece, kind: kind, theme: theme)
-                result.append(piece)
+                result.append(styled(run, kind: kind, theme: theme))
             }
         }
         return result
@@ -47,17 +45,28 @@ public extension FormatCanvas {
         var out = String()
         out.reserveCapacity(text.count)
         for character in text {
-            switch character {
-            case " ": out.append("·")
-            case "\t": out.append("⇥")
-            case "\n": out.append("↵\n")
-            case "\r": out.append("␍")
-            default: out.append(character)
+            if let glyph = invisibleGlyph(for: character) {
+                out += glyph
+            } else {
+                out.append(character)
             }
         }
         return out
     }
 
+    /// The marker shown for a whitespace character, or nil for anything else.
+    private static func invisibleGlyph(for character: Character) -> String? {
+        switch character {
+        case " ": return "·"
+        case "\t": return "⇥"
+        case "\n": return "↵\n"
+        case "\r": return "␍"
+        default: return nil
+        }
+    }
+
+    /// Splits a run into visible text, coloured as its kind, and whitespace
+    /// markers, which recede in the secondary colour.
     private static func appendRevealingInvisibles(_ text: String,
                                                   kind: SyntaxToken.Kind,
                                                   theme: Theme,
@@ -67,44 +76,35 @@ public extension FormatCanvas {
 
         func flush() {
             guard !buffer.isEmpty else { return }
-            var piece = AttributedString(buffer)
-            let flushKind = bufferIsInvisible ? SyntaxToken.Kind.whitespace : kind
-            let rgb = bufferIsInvisible ? theme.secondaryForeground : theme.color(for: kind)
-            piece.foregroundColor = Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
-            if flushKind == .key || flushKind == .tagName {
-                piece.inlinePresentationIntent = .stronglyEmphasized
-            }
-            result.append(piece)
+            result.append(bufferIsInvisible
+                ? styled(buffer, color: theme.secondaryForeground, emphasized: false)
+                : styled(buffer, kind: kind, theme: theme))
             buffer.removeAll(keepingCapacity: true)
         }
 
         for character in text {
-            let (display, isInvisible): (String, Bool) = {
-                switch character {
-                case " ": return ("·", true)
-                case "\t": return ("⇥", true)
-                case "\n": return ("↵\n", true)
-                case "\r": return ("␍", true)
-                default: return (String(character), false)
-                }
-            }()
+            let glyph = invisibleGlyph(for: character)
+            let isInvisible = glyph != nil
             if !buffer.isEmpty, isInvisible != bufferIsInvisible {
                 flush()
             }
             bufferIsInvisible = isInvisible
-            buffer.append(display)
+            if let glyph { buffer += glyph } else { buffer.append(character) }
         }
         flush()
     }
 
-    private static func style(_ piece: inout AttributedString,
-                              kind: SyntaxToken.Kind,
-                              theme: Theme) {
-        let rgb = theme.color(for: kind)
-        piece.foregroundColor = Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
-        if kind == .key || kind == .tagName {
+    private static func styled(_ text: String, kind: SyntaxToken.Kind, theme: Theme) -> AttributedString {
+        styled(text, color: theme.color(for: kind), emphasized: kind == .key || kind == .tagName)
+    }
+
+    private static func styled(_ text: String, color: Theme.RGB, emphasized: Bool) -> AttributedString {
+        var piece = AttributedString(text)
+        piece.foregroundColor = color.color
+        if emphasized {
             piece.inlinePresentationIntent = .stronglyEmphasized
         }
+        return piece
     }
 }
 

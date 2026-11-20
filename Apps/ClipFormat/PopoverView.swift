@@ -2,9 +2,6 @@ import AppKit
 import ClipFormatShared
 import SwiftUI
 
-/// The popover shown when the status item is clicked: pretty JSON or XML when
-/// the clipboard has some, an explanation when it does not. The same view is
-/// hosted in the torn-off window with chrome moved into the title bar.
 extension View {
     /// Pins content smaller than its scroll view to the top left, which
     /// SwiftUI otherwise centres in both axes.
@@ -49,6 +46,10 @@ enum PopoverChrome {
     case window
 }
 
+/// The popover shown when the status item is clicked: the formatted clipboard
+/// when it holds JSON, XML or YAML, the raw text when it does not. The same
+/// view is hosted in the torn-off window, with its actions level with the
+/// traffic lights.
 struct PopoverView: View {
     @ObservedObject var monitor: ClipboardMonitor
     @ObservedObject var preferences: Preferences
@@ -62,14 +63,17 @@ struct PopoverView: View {
     private var document: FormattedDocument { monitor.document }
 
     var body: some View {
-        Group {
-            switch chrome {
-            case .popover:
-                popoverBody
-            case .window:
-                windowBody
-            }
+        VStack(spacing: 0) {
+            chromeTopBar
+            formattingBanner
+            documentBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // In the window, fullSizeContentView already draws under the title
+        // bar; ignoring the safe-area inset puts the actions level with the
+        // traffic lights instead of one row below them.
+        .ignoresSafeArea(.container, edges: chrome == .window ? .top : [])
         // Sizing belongs to whoever is hosting the view: the popover pins it
         // to contentSize, and the torn-off window lets the user resize.
         // Top-leading alignment keeps the action bar pinned when the clipboard
@@ -80,36 +84,13 @@ struct PopoverView: View {
         .background(theme.background.color)
     }
 
-    private var popoverBody: some View {
-        VStack(spacing: 0) {
-            chromeTopBar(showsDetachHandle: true)
-            formattingBanner
-            documentBody
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var windowBody: some View {
-        VStack(spacing: 0) {
-            // Same action cluster as the popover — not an NSToolbar — so spacing
-            // and glass match exactly. The system title bar still owns traffic
-            // lights and window dragging.
-            chromeTopBar(showsDetachHandle: false)
-            formattingBanner
-            documentBody
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        // fullSizeContentView already draws under the title bar; ignore the
-        // safe-area inset so the actions sit level with the traffic lights
-        // instead of one row below them.
-        .ignoresSafeArea(.container, edges: .top)
-    }
-
-    /// Leading grabber only in the popover; both hosts share the trailing actions.
-    private func chromeTopBar(showsDetachHandle: Bool) -> some View {
-        HStack(spacing: 12) {
+    /// Leading grabber only in the popover; both hosts share the trailing
+    /// actions — the window's are not an NSToolbar, so spacing and glass match
+    /// the popover exactly while the title bar keeps the traffic lights and
+    /// window dragging.
+    private var chromeTopBar: some View {
+        let showsDetachHandle = chrome == .popover
+        return HStack(spacing: 12) {
             if showsDetachHandle {
                 detachHandle
             } else {
@@ -128,34 +109,29 @@ struct PopoverView: View {
         .padding(.bottom, 8)
     }
 
+    /// Spacing has to live both in the HStack and in GlassEffectContainer —
+    /// the container's spacing is what keeps neighbouring glass shapes apart.
+    private static let actionGap: CGFloat = 20
+
     @ViewBuilder
     private var actionBar: some View {
-        // Spacing has to live both in the HStack and in GlassEffectContainer —
-        // the container's spacing is what keeps neighbouring glass shapes apart.
-        let gap: CGFloat = 20
         if #available(macOS 26, *) {
-            GlassEffectContainer(spacing: gap) {
-                HStack(spacing: gap) {
-                    copyMenu.toolbarLikeGlass()
-                    smallerTextButton.toolbarLikeGlass()
-                    largerTextButton.toolbarLikeGlass()
-                    preferencesButton.toolbarLikeGlass()
-                }
-                .font(.system(size: 13))
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-            }
+            GlassEffectContainer(spacing: Self.actionGap) { actionButtons }
         } else {
-            HStack(spacing: gap) {
-                copyMenu.toolbarLikeGlass()
-                smallerTextButton.toolbarLikeGlass()
-                largerTextButton.toolbarLikeGlass()
-                preferencesButton.toolbarLikeGlass()
-            }
-            .font(.system(size: 13))
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
+            actionButtons
         }
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: Self.actionGap) {
+            copyMenu.toolbarLikeGlass()
+            smallerTextButton.toolbarLikeGlass()
+            largerTextButton.toolbarLikeGlass()
+            preferencesButton.toolbarLikeGlass()
+        }
+        .font(.system(size: 13))
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
     }
 
     /// One Copy control; Pretty / Minified live in the menu where labels fit.
@@ -263,7 +239,9 @@ struct PopoverView: View {
 
     private var emptyState: some View {
         Group {
-            if !document.rawExcerpt().isEmpty {
+            // The source is stored trimmed, so this is the excerpt's emptiness
+            // without building one.
+            if !document.source.isEmpty {
                 ScrollView {
                     Text(rawPreviewText)
                         .font(.system(size: CGFloat(max(11, preferences.fontSize - 1)), design: .monospaced))

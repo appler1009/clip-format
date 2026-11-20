@@ -38,17 +38,9 @@ public enum PrettyPrinter {
     /// a multi‑megabyte tree never materialises a full token array first.
     public static func tokens(for value: JSONValue, indent: Int,
                               characterLimit: Int = .max) -> (tokens: [SyntaxToken], isTruncated: Bool) {
-        var tokens: [SyntaxToken] = []
-        tokens.reserveCapacity(min(256, max(16, characterLimit / 8)))
-        var count = 0
-        var truncated = false
-        emit(value, indent: indent, level: 0, limit: characterLimit,
-             count: &count, truncated: &truncated, into: &tokens)
-        if truncated {
-            tokens.append(SyntaxToken(kind: .whitespace, text: "\n"))
-            tokens.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
-        }
-        return (tokens, truncated)
+        var sink = TokenSink(limit: characterLimit, reserve: min(256, max(16, characterLimit / 8)))
+        emit(value, indent: indent, level: 0, into: &sink)
+        return sink.finish()
     }
 
     /// Formats `value` as indented plain text.
@@ -64,70 +56,55 @@ public enum PrettyPrinter {
         return out
     }
 
-    private static func emit(_ value: JSONValue, indent: Int, level: Int, limit: Int,
-                             count: inout Int, truncated: inout Bool,
-                             into tokens: inout [SyntaxToken]) {
-        guard !truncated else { return }
+    /// Shared with JSON Lines, which prints every record into one sink.
+    static func emit(_ value: JSONValue, indent: Int, level: Int, into sink: inout TokenSink) {
+        guard !sink.isTruncated else { return }
 
-        func append(_ kind: SyntaxToken.Kind, _ text: String) {
-            guard !truncated else { return }
-            let next = count + text.count
-            if next > limit {
-                truncated = true
-                return
-            }
-            count = next
-            tokens.append(SyntaxToken(kind: kind, text: text))
+        func newline(_ level: Int) {
+            sink.append(.whitespace, "\n" + String(repeating: " ", count: indent * level))
         }
 
         switch value {
         case .null:
-            append(.null, "null")
+            sink.append(.null, "null")
         case .bool(let flag):
-            append(.bool, flag ? "true" : "false")
+            sink.append(.bool, flag ? "true" : "false")
         case .number(let literal):
-            append(.number, literal)
+            sink.append(.number, literal)
         case .string(let text):
-            append(.string, quote(text))
+            sink.append(.string, quote(text))
         case .array(let elements):
             guard !elements.isEmpty else {
-                append(.punctuation, "[]")
+                sink.append(.punctuation, "[]")
                 return
             }
-            append(.punctuation, "[")
+            sink.append(.punctuation, "[")
             for (offset, element) in elements.enumerated() {
-                if truncated { return }
-                if offset > 0 { append(.punctuation, ",") }
-                newline(indent: indent, level: level + 1, append: append)
-                emit(element, indent: indent, level: level + 1, limit: limit,
-                     count: &count, truncated: &truncated, into: &tokens)
+                if sink.isTruncated { return }
+                if offset > 0 { sink.append(.punctuation, ",") }
+                newline(level + 1)
+                emit(element, indent: indent, level: level + 1, into: &sink)
             }
-            newline(indent: indent, level: level, append: append)
-            append(.punctuation, "]")
+            newline(level)
+            sink.append(.punctuation, "]")
         case .object(let members):
             guard !members.isEmpty else {
-                append(.punctuation, "{}")
+                sink.append(.punctuation, "{}")
                 return
             }
-            append(.punctuation, "{")
+            sink.append(.punctuation, "{")
             for (offset, member) in members.enumerated() {
-                if truncated { return }
-                if offset > 0 { append(.punctuation, ",") }
-                newline(indent: indent, level: level + 1, append: append)
-                append(.key, quote(member.key))
-                append(.punctuation, ":")
-                append(.whitespace, " ")
-                emit(member.value, indent: indent, level: level + 1, limit: limit,
-                     count: &count, truncated: &truncated, into: &tokens)
+                if sink.isTruncated { return }
+                if offset > 0 { sink.append(.punctuation, ",") }
+                newline(level + 1)
+                sink.append(.key, quote(member.key))
+                sink.append(.punctuation, ":")
+                sink.append(.whitespace, " ")
+                emit(member.value, indent: indent, level: level + 1, into: &sink)
             }
-            newline(indent: indent, level: level, append: append)
-            append(.punctuation, "}")
+            newline(level)
+            sink.append(.punctuation, "}")
         }
-    }
-
-    private static func newline(indent: Int, level: Int,
-                                append: (SyntaxToken.Kind, String) -> Void) {
-        append(.whitespace, "\n" + String(repeating: " ", count: indent * level))
     }
 
     private static func emitMinified(_ value: JSONValue, into out: inout String) {

@@ -135,8 +135,8 @@ public enum FormatCanvas {
         }
 
         // A parse error from a JSON-shaped source stays a JSON error. Plain text
-        // that never looked like JSON or XML is not "Not JSON" — the app formats
-        // more than one kind.
+        // that never looked like any of the formats is not "Not JSON" — the app
+        // formats more than one kind.
         if let documentError {
             return FormattedDocument(source: trimmed, indent: indent, value: nil,
                                       errorMessage: documentError.message)
@@ -217,7 +217,8 @@ public enum FormatCanvas {
         "\(error.reason) (line \(line), column \(error.column))"
     }
 
-    /// Reads a file as JSON.
+    /// Reads a file in any of the formats this app knows; `.yaml` and `.yml`
+    /// are read as YAML without the clipboard's shape check.
     ///
     /// The whole file is read or none of it is. Parsing needs a complete
     /// document, so handing the parser a leading slice of a large file reports
@@ -267,19 +268,6 @@ public enum FormatCanvas {
         return (first == "{" && last == "}") || (first == "[" && last == "]")
     }
 
-    static func truncate(_ tokens: [SyntaxToken], toCharacters limit: Int) -> [SyntaxToken] {
-        var kept: [SyntaxToken] = []
-        var count = 0
-        for token in tokens {
-            if count + token.text.count > limit { break }
-            count += token.text.count
-            kept.append(token)
-        }
-        kept.append(SyntaxToken(kind: .whitespace, text: "\n"))
-        kept.append(SyntaxToken(kind: .punctuation, text: "… truncated"))
-        return kept
-    }
-
     // MARK: - HTML rendering
 
     /// Renders a full standalone HTML document.
@@ -298,7 +286,7 @@ public enum FormatCanvas {
                 // Coalesce neighbouring tokens of the same kind into one span.
                 var run = ""
                 while index < document.tokens.endIndex, document.tokens[index].kind == kind {
-                    run += escapeHTML(document.tokens[index].text)
+                    run += escapeMarkup(document.tokens[index].text)
                     index += 1
                 }
                 if kind == .whitespace {
@@ -309,9 +297,9 @@ public enum FormatCanvas {
             }
             body = "<pre class=\"json\">\(code)</pre>"
         } else {
-            let title = escapeHTML(document.errorTitle)
-            let message = escapeHTML(document.errorMessage ?? "Can't format")
-            let excerpt = escapeHTML(document.rawExcerpt(limit: 2_000))
+            let title = escapeMarkup(document.errorTitle)
+            let message = escapeMarkup(document.errorMessage ?? "Can't format")
+            let excerpt = escapeMarkup(document.rawExcerpt(limit: 2_000))
             body = """
             <div class="notice"><span class="badge">\(title)</span><span class="reason">\(message)</span></div>
             <pre class="raw">\(excerpt)</pre>
@@ -405,18 +393,4 @@ public enum FormatCanvas {
         }
     }
 
-    static func escapeHTML(_ text: String) -> String {
-        var out = ""
-        out.reserveCapacity(text.count)
-        for character in text {
-            switch character {
-            case "&": out += "&amp;"
-            case "<": out += "&lt;"
-            case ">": out += "&gt;"
-            case "\"": out += "&quot;"
-            default: out.append(character)
-            }
-        }
-        return out
-    }
 }

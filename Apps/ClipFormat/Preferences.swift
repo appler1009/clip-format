@@ -100,20 +100,15 @@ final class Preferences: ObservableObject {
         let standard = UserDefaults.standard
         guard suite !== standard else { return }
         guard suite.object(forKey: Key.indent) == nil else { return }
-        if standard.object(forKey: Key.indent) != nil {
-            suite.set(standard.integer(forKey: Key.indent), forKey: Key.indent)
-        }
-        if standard.object(forKey: Key.fontSize) != nil {
-            suite.set(standard.integer(forKey: Key.fontSize), forKey: Key.fontSize)
-        }
-        if standard.object(forKey: Key.showBadge) != nil {
-            suite.set(standard.bool(forKey: Key.showBadge), forKey: Key.showBadge)
-        }
-        if standard.object(forKey: Key.showInvisibles) != nil {
-            suite.set(standard.bool(forKey: Key.showInvisibles), forKey: Key.showInvisibles)
+        for key in [Key.indent, Key.fontSize, Key.showBadge, Key.showInvisibles] {
+            if let value = standard.object(forKey: key) {
+                suite.set(value, forKey: key)
+            }
         }
     }
 
+    // Clamped here as well as in `didSet`: `@Published` emits in `willSet`,
+    // so an out-of-range value would reach subscribers before being corrected.
     func increaseFontSize() {
         fontSize = min(Self.maxFontSize, fontSize + 1)
     }

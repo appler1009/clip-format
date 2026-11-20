@@ -76,33 +76,34 @@ final class ClipboardMonitor: ObservableObject {
             isFormatting = false
 
         case .text(let text):
-            isFormatting = true
-            Task.detached(priority: .userInitiated) {
-                let model = FormatCanvas.model(from: text, indent: indent)
-                await MainActor.run {
-                    guard self.generation == generation else { return }
-                    self.document = model
-                    self.isFormatting = false
-                }
+            formatOffMain(generation: generation) {
+                FormatCanvas.model(from: text, indent: indent)
             }
 
         case .file(let url):
             // Pasteboard yields the URL on the main thread; the file bytes and
             // parse move off it so a large Finder copy does not hitch the UI.
-            isFormatting = true
-            Task.detached(priority: .userInitiated) {
-                let model: FormattedDocument
-                if let data = try? Data(contentsOf: url, options: .mappedIfSafe) {
-                    model = FormatCanvas.model(from: data, indent: indent,
-                                              assumingYAML: FormatCanvas.isYAMLFile(url))
-                } else {
-                    model = FormatCanvas.model(from: "", indent: indent)
+            formatOffMain(generation: generation) {
+                guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
+                    return FormatCanvas.model(from: "", indent: indent)
                 }
-                await MainActor.run {
-                    guard self.generation == generation else { return }
-                    self.document = model
-                    self.isFormatting = false
-                }
+                return FormatCanvas.model(from: data, indent: indent,
+                                          assumingYAML: FormatCanvas.isYAMLFile(url))
+            }
+        }
+    }
+
+    /// Runs `work` off the main thread and publishes its result, unless a
+    /// newer pasteboard change has started its own pass in the meantime.
+    private func formatOffMain(generation: Int,
+                               _ work: @escaping @Sendable () -> FormattedDocument) {
+        isFormatting = true
+        Task.detached(priority: .userInitiated) {
+            let model = work()
+            await MainActor.run {
+                guard self.generation == generation else { return }
+                self.document = model
+                self.isFormatting = false
             }
         }
     }
@@ -113,14 +114,18 @@ final class ClipboardMonitor: ObservableObject {
         case file(URL)
     }
 
-    /// Prefers a copied `.json` file URL (bytes read off-main), then plain
-    /// text, then the plain-text flattening of RTF. Pasteboard reads stay on
-    /// the main actor — AppKit's contract.
+    /// Copied files read by contents rather than by the name on the
+    /// pasteboard. `.geojson` and `.webmanifest` are JSON under another name.
+    private static let fileExtensions: Set<String> = ["json", "jsonc", "geojson", "webmanifest", "yaml", "yml"]
+
+    /// Prefers a copied file URL in a known format (bytes read off-main), then
+    /// plain text, then the plain-text flattening of RTF. Pasteboard reads stay
+    /// on the main actor — AppKit's contract.
     private func snapshotPasteboard() -> Snapshot {
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self],
                                              options: [.urlReadingFileURLsOnly: true]) as? [URL],
            let url = urls.first,
-           ["json", "jsonc", "geojson", "webmanifest", "yaml", "yml"].contains(url.pathExtension.lowercased()) {
+           Self.fileExtensions.contains(url.pathExtension.lowercased()) {
             return .file(url)
         }
         if let text = pasteboard.string(forType: .string) {

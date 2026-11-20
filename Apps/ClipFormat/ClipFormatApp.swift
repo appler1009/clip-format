@@ -39,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Set when a tear-off spends the current popover; see the detach handler.
     private var popoverIsSpent = false
 
+    /// The popover's size, and a first-ever torn-off window's.
+    static let contentSize = NSSize(width: 520, height: 420)
+    private static let escapeKeyCode: UInt16 = 53
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         configurePopover()
@@ -179,10 +183,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // zero preferred size, which opens the popover invisibly, so the
         // popover's size is stated here instead.
         hosting.sizingOptions = []
-        hosting.preferredContentSize = NSSize(width: 520, height: 420)
+        hosting.preferredContentSize = Self.contentSize
         hosting.view.autoresizingMask = [.width, .height]
         popover.contentViewController = hosting
-        popover.contentSize = NSSize(width: 520, height: 420)
+        popover.contentSize = Self.contentSize
     }
 
     /// One source, two hosts: the window shows its own controller over the
@@ -242,24 +246,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         eventMonitor = nil
         // The key monitor stays while a torn-off window is around.
-        guard detachedWindow == nil, let keyMonitor else { return }
+        if detachedWindow == nil { removeKeyMonitor() }
+    }
+
+    private func removeKeyMonitor() {
+        guard let keyMonitor else { return }
         NSEvent.removeMonitor(keyMonitor)
         self.keyMonitor = nil
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
         // Escape closes the popover. The torn-off window handles Escape itself
         // via `cancelOperation` (and uses it to leave full screen first).
-        if popover.isShown, event.keyCode == 53 {
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            if flags.isEmpty {
-                popover.performClose(nil)
-                return nil
-            }
+        if popover.isShown, event.keyCode == Self.escapeKeyCode, flags.isEmpty {
+            popover.performClose(nil)
+            return nil
         }
 
         guard popover.isShown || detachedWindow?.isKeyWindow == true else { return event }
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard flags.contains(.command),
               !flags.contains(.option),
               !flags.contains(.control) else { return event }
@@ -333,7 +339,7 @@ extension AppDelegate: NSPopoverDelegate {
         // carries a minimum but no fixed size and would otherwise open at
         // 380x220 and clip the JSON. AppKit places it under the drag.
         if !window.setFrameUsingName(DetachedJSONWindow.frameName) {
-            window.setContentSize(NSSize(width: 520, height: 420))
+            window.setContentSize(Self.contentSize)
         }
         window.delegate = self
         detachedWindow = window
@@ -384,10 +390,7 @@ extension AppDelegate: NSWindowDelegate {
         window.persistFrameUnlessFullScreen()
         detachedWindow = nil
         // Nothing is watching for ⌘+ / ⌘− any more until a surface reopens.
-        if let keyMonitor, !popover.isShown {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
+        if !popover.isShown { removeKeyMonitor() }
         Diagnostics.info("detached window closed")
     }
 }

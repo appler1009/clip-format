@@ -12,8 +12,11 @@ final class PerformanceBenchmarks: XCTestCase {
             .deletingLastPathComponent() // Tests
             .deletingLastPathComponent() // ClipFormatShared
             .deletingLastPathComponent() // Shared
+            .deletingLastPathComponent() // repository root
             .appendingPathComponent("Fixtures/large.json")
-        return (try? String(contentsOf: url, encoding: .utf8)) ?? #"{"fallback":true}"#
+        // No fallback: a missing fixture used to be replaced by a one-line
+        // document, and the benches went on timing that without saying so.
+        return try! String(contentsOf: url, encoding: .utf8)
     }()
 
     private lazy var hugeJSON: String = {

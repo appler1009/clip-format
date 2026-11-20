@@ -39,7 +39,7 @@ public indirect enum JSONValue: Equatable, Sendable {
 }
 
 public struct JSONParseError: Error, Equatable, Sendable {
-    /// UTF-16 offset into the source text where parsing stopped.
+    /// Offset into the source, in Unicode scalars, where parsing stopped.
     public let offset: Int
     public let line: Int
     public let column: Int
