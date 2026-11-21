@@ -4,6 +4,11 @@ All notable changes to ClipFormat are recorded here. The version in
 `project.yml` (`MARKETING_VERSION`) is the source of truth; the release
 workflow refuses to build a tag that disagrees with it.
 
+## 0.5.7
+
+- Internal clean-up of the formatting and app code. Nothing you see or copy
+  changes: every output was checked byte for byte against 0.5.6.
+
 ## 0.5.6
 
 - YAML. Copied YAML is recognised on the clipboard (a leading `---`, or
